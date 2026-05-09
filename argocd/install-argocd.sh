@@ -37,3 +37,16 @@ echo ""
 echo "2. Open in browser: https://localhost:8080"
 echo "   Username: admin"
 echo "   Password: (from above)"
+
+"browserslist": {
+  "production": [
+    ">0.2%",
+    "not dead",
+    "not op_mini all"
+  ],
+  "development": [
+    "last 1 chrome version",
+    "last 1 firefox version",
+    "last 1 safari version"
+  ]
+}
