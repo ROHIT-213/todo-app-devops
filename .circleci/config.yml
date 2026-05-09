@@ -60,7 +60,7 @@ jobs:
             docker push rohit213/project-app:$CIRCLE_SHA1 
             docker push rohit213/project-app:latest
       - checkout
-        attach_workspace:
+      - attach_workspace:
           at: .
       - persist_to_workspace:
           root: .
