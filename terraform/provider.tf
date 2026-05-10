@@ -19,14 +19,14 @@ terraform {
    backend "s3" {
      bucket         = "todo-app-terraform-state"
      key            = "eks/terraform.tfstate"
-     region         = "ap-south-1"
+     region         = "eu-central-1" # <--- CHANGE THIS TO eu-central-1
      encrypt        = true
      dynamodb_table = "terraform-locks"
    }
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = var.aws_region # This stays ap-south-1 (from your variables)
 
   default_tags {
     tags = {
@@ -37,7 +37,6 @@ provider "aws" {
     }
   }
 }
-
 data "aws_eks_cluster" "cluster" {
   name = aws_eks_cluster.main.name
 }
