@@ -16,9 +16,9 @@ metadata:
   namespace: argocd
 data:
   type: git
-  url: https://github.com/YOUR_GITHUB_ORG
+  url: https://github.com/ROHIT-213/todo-app-devops.git
   password: $GITHUB_TOKEN
-  username: not-used
+  username: $GITHUB_USERNAME
   sshPrivateKeySecret:
     name: github-ssh-key
     key: ssh-privatekey
