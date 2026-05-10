@@ -39,14 +39,22 @@ jobs:
 
   push_image:
     description: Build and push Docker image to registry
-    docker:
-      - image: cimg/base:stable
+
+    machine:
+    image: ubuntu-2204:current
+
+    # docker:
+    #   - image: cimg/base:stable
     steps:
+      - checkout
       - attach_workspace:
           at: .
       
-      - setup_remote_docker:
-          version: 20.10.18
+      - run:
+        name: Verify Docker
+        command: docker --version
+      # - setup_remote_docker:
+      #     version: 20.10.18
       - run:
           name: Build Docker image
           command: |
@@ -61,7 +69,7 @@ jobs:
           command: | 
             docker push rohit213/project-app:$CIRCLE_SHA1 
             docker push rohit213/project-app:latest
-      - checkout
+      
       - attach_workspace:
           at: .
       - persist_to_workspace:
