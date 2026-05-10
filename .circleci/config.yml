@@ -42,10 +42,11 @@ jobs:
       - run:
           name: Install Terraform (Direct Binary)
           command: |
-            # Using 1.5.7 as a stable version
-            sudo curl -Lo terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
-            sudo unzip terraform.zip
-            sudo mv terraform /usr/local/bin/
+            if ! command -v terraform &> /dev/null; then
+              sudo curl -Lo terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+              sudo unzip -o terraform.zip # -o forces overwrite so it won't ask you [y/n]
+              sudo mv terraform /usr/local/bin/
+            fi
             terraform --version
       - run:
           name: Terraform Plan
@@ -55,7 +56,8 @@ jobs:
             terraform plan -var-file="terraform.tfvars" -out=tfplan
       - persist_to_workspace:
           root: .
-          paths: [terraform/tfplan]
+          paths:
+            - terraform/tfplan
 
   apply_infrastructure:
     docker:
@@ -68,9 +70,11 @@ jobs:
       - run:
           name: Install Terraform (Direct Binary)
           command: |
-            sudo curl -Lo terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
-            sudo unzip terraform.zip
-            sudo mv terraform /usr/local/bin/
+            if ! command -v terraform &> /dev/null; then
+              sudo curl -Lo terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+              sudo unzip -o terraform.zip
+              sudo mv terraform /usr/local/bin/
+            fi
       - run:
           name: Terraform Apply
           command: |
@@ -84,7 +88,9 @@ jobs:
             terraform output -json > ../terraform_outputs.json
       - persist_to_workspace:
           root: .
-          paths: [terraform_outputs.json]
+          paths:
+            - terraform_outputs.json
+
   update_k8s_manifests:
     docker:
       - image: cimg/base:stable
