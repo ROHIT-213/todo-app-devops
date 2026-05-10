@@ -39,15 +39,18 @@ jobs:
 
   push_image:
     description: Build and push Docker image to registry
-    docker:
-      - image: cimg/base:stable
+    machine:
+      image: ubuntu-2204:current
     steps:
       - checkout
       - attach_workspace:
           at: .
       
-      - setup_remote_docker:
-          version: 20.10.7
+      # - setup_remote_docker:
+      #     version: 20.10.7
+      - run:
+          name: verify Docker
+          command: docker --version
       - run:
           name: Build Docker image
           command: |
