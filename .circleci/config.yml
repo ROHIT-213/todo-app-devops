@@ -40,12 +40,17 @@ jobs:
       - checkout
       - aws-cli/setup
       - run:
-          name: Install Terraform (Direct Binary)
+          name: Install Terraform (Conflict-Free)
           command: |
             if ! command -v terraform &> /dev/null; then
-              sudo curl -Lo terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
-              sudo unzip -o terraform.zip # -o forces overwrite so it won't ask you [y/n]
-              sudo mv terraform /usr/local/bin/
+              # Download to a temporary file
+              sudo curl -Lo /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+              # Unzip into a temporary directory to avoid the "Is a directory" error
+              sudo unzip -o /tmp/terraform.zip -d /tmp/terraform_bin
+              # Move the actual binary to your path
+              sudo mv /tmp/terraform_bin/terraform /usr/local/bin/
+              # Clean up
+              sudo rm -rf /tmp/terraform_bin /tmp/terraform.zip
             fi
             terraform --version
       - run:
@@ -68,12 +73,13 @@ jobs:
           at: .
       - aws-cli/setup
       - run:
-          name: Install Terraform (Direct Binary)
+          name: Install Terraform (Conflict-Free)
           command: |
             if ! command -v terraform &> /dev/null; then
-              sudo curl -Lo terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
-              sudo unzip -o terraform.zip
-              sudo mv terraform /usr/local/bin/
+              sudo curl -Lo /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+              sudo unzip -o /tmp/terraform.zip -d /tmp/terraform_bin
+              sudo mv /tmp/terraform_bin/terraform /usr/local/bin/
+              sudo rm -rf /tmp/terraform_bin /tmp/terraform.zip
             fi
       - run:
           name: Terraform Apply
