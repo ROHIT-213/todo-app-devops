@@ -8,7 +8,7 @@ jobs:
   build:
     description: Build and test the application
     docker:
-      - image: cimg/node:18.17
+      - image: cimg/node:16.20
     steps:
       - checkout
       - restore_cache:
@@ -39,15 +39,15 @@ jobs:
 
   push_image:
     description: Build and push Docker image to registry
-    machine:
-      image: ubuntu-2204:current
+    docker:
+      - image: cimg/base:stable
     steps:
       - checkout
       - attach_workspace:
           at: .
-      - run:
-          name: Verify Docker
-          command: docker --version
+      
+      - setup_remote_docker:
+          version: 20.10.7
       - run:
           name: Build Docker image
           command: |
@@ -62,6 +62,9 @@ jobs:
           command: | 
             docker push rohit213/project-app:$CIRCLE_SHA1 
             docker push rohit213/project-app:latest
+      
+      - attach_workspace:
+          at: .
       - persist_to_workspace:
           root: .
           paths:
