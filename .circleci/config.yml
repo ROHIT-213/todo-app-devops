@@ -39,9 +39,8 @@ jobs:
 
   push_image:
     description: Build and push Docker image to registry
-
     machine:
-    image: ubuntu-2204:current
+      image: ubuntu-2204:current
 
     # docker:
     #   - image: cimg/base:stable
@@ -60,11 +59,11 @@ jobs:
           command: |
             docker build -t rohit213/project-app:$CIRCLE_SHA1 .
             docker tag rohit213/project-app:$CIRCLE_SHA1 rohit213/project-app:latest
-      - run: 
+      - run:
           name: DockerHub Login 
           command: | 
             echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin
-      - run: 
+      - run:
           name: Push Docker image 
           command: | 
             docker push rohit213/project-app:$CIRCLE_SHA1 
