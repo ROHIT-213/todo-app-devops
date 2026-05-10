@@ -33,7 +33,7 @@ spec:
       
       containers:
       - name: todo-app
-        image: rohit213/project-app:v1.0   # This will be updated by CircleCI
+        image: rohit213/project-app:8b081f8793c4001939730a16ffa626d1a5c7b311
         imagePullPolicy: Always
         ports:
         - name: http
