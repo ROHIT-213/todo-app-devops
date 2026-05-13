@@ -12,7 +12,7 @@ public_subnet_cidrs = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
 
 # EKS Configuration
 cluster_name = "todo-app-eks"
-cluster_version = "1.27"
+cluster_version = "1.35"
 node_group_desired_size = 3
 node_group_min_size = 3
 node_group_max_size = 10
