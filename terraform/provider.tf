@@ -17,7 +17,7 @@ terraform {
   }
 
    backend "s3" {
-     bucket         = "todo-app-terraform-state"
+     bucket         = "todo-app-terraform-state-2809"
      key            = "eks/terraform.tfstate"
      region         = "ap-south-1" 
      encrypt        = true
