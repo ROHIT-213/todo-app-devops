@@ -58,14 +58,16 @@ jobs:
           command: |
             cd terraform
             terraform init -upgrade
-            terraform plan -var-file="terraform.tfvars" -out=tfplan
+            terraform validate
+            terraform fmt -check
+            terraform plan -var="aws_region=$AWS_REGION" -var="cluster_name=todo-app-eks" -var-file="terraform.tfvars" -out=tfplan
+            
       - persist_to_workspace:
           root: .
           paths:
             - terraform/tfplan
 
   apply_infrastructure:
-    # working_directory: /Appcode/terraform
     docker:
       - image: cimg/base:stable
     steps:
@@ -138,8 +140,7 @@ jobs:
 workflows:
   infrastructure_workflow:
     jobs:
-      - deploy_infrastructure: 
-          working_directory: /Appcode/terraform   
+      - deploy_infrastructure:   
           filters: { branches: { only: infrastructure } }
       - hold_apply:
           type: approval
