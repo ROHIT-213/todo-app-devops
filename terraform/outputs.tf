@@ -69,10 +69,10 @@ output "s3_bucket_arn" {
   value       = aws_s3_bucket.app_data.arn
 }
 
-output "terraform_state_bucket" {
-  description = "Terraform state S3 bucket"
-  value       = aws_s3_bucket.terraform_state.id
-}
+# output "terraform_state_bucket" {
+#   description = "Terraform state S3 bucket"
+#   value       = aws_s3_bucket.terraform_state.id
+# }
 
 output "oidc_provider_arn" {
   description = "OIDC Provider ARN"

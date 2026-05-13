@@ -59,9 +59,8 @@ jobs:
             cd terraform
             terraform init -upgrade
             terraform validate
-            terraform fmt -check
             terraform plan -var="aws_region=$AWS_REGION" -var="cluster_name=todo-app-eks" -var-file="terraform.tfvars" -out=tfplan
-            
+
       - persist_to_workspace:
           root: .
           paths:

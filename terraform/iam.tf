@@ -108,7 +108,8 @@ resource "aws_iam_role_policy" "node_dynamodb_s3_policy" {
 # OIDC Provider for AWS IAM Roles for Service Accounts (IRSA)
 resource "aws_iam_openid_connect_provider" "eks" {
   client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.eks.thumbprint]
+  thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
+  # thumbprint_list = [data.tls_certificate.eks.thumbprint]
   url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
 
   tags = {
