@@ -34,7 +34,6 @@ jobs:
             docker push $DOCKERHUB_USERNAME/project-app:latest
 
   deploy_infrastructure:
-    working_directory: /Appcode/terraform
     docker:
       - image: cimg/base:stable 
     steps:
@@ -66,7 +65,7 @@ jobs:
             - terraform/tfplan
 
   apply_infrastructure:
-    working_directory: /Appcode/terraform
+    # working_directory: /Appcode/terraform
     docker:
       - image: cimg/base:stable
     steps:
@@ -139,7 +138,8 @@ jobs:
 workflows:
   infrastructure_workflow:
     jobs:
-      - deploy_infrastructure:    
+      - deploy_infrastructure: 
+          working_directory: /Appcode/terraform   
           filters: { branches: { only: infrastructure } }
       - hold_apply:
           type: approval
