@@ -26,10 +26,10 @@ spec:
         prometheus.io/port: "3000"
     spec:
       serviceAccountName: todo-app
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+      # securityContext:
+      #   runAsNonRoot: true
+      #   runAsUser: 1000
+      #   fsGroup: 1000
       
       containers:
       - name: todo-app
