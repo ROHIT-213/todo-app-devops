@@ -9,7 +9,7 @@ spec:
   project: default
   
   source:
-    repoURL: https://github.com/YOUR_GITHUB_ORG/todo-app-deployment.git
+    repoURL: https://github.com/ROHIT-213/todo-app-devops.git
     targetRevision: main
     path: k8s
     
