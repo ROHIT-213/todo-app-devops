@@ -89,7 +89,24 @@ spec:
           capabilities:
             drop:
             - ALL
-      
+        # --- FIX FOR NGINX PERMISSIONS ---
+        volumeMounts:
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+        - name: tmp
+          mountPath: /tmp
+
+      # --- TEMP STORAGE VOLUMES ---
+      volumes:
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+        
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
