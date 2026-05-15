@@ -27,7 +27,7 @@ spec:
     spec:
       serviceAccountName: todo-app
       securityContext:
-        fsGroup: 1000
+        fsGroup: 101
         # --- FIX FOR NGINX PERMISSIONS --- 
         # runAsNonRoot: true
         # runAsUser: 1000
