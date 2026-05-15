@@ -7,7 +7,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Serve with Nginx
-FROM nginx:stable-alpine
+FROM nginx:alpine 
 # Now this line will work because 'build' is defined above
 COPY --from=build /app/build /usr/share/nginx/html
 EXPOSE 80
