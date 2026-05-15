@@ -11,6 +11,6 @@ FROM nginxinc/nginx-unprivileged:alpine
 # FROM nginx:alpine 
 # Now this line will work because 'build' is defined above
 COPY --from=build /app/build /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]
 
