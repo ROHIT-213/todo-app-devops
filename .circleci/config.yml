@@ -197,7 +197,12 @@ jobs:
       - run:
           name: Sync ArgoCD Application
           command: |
-            argocd app sync todo-app --grpc-web
+            echo "Starting ArgoCD sync..."
+            argocd app sync todo-app --grpc-web || true
+
+            echo "Waiting for application to sync..."
+
+            argocd app wait todo-app --grpc-web --timeout 300
       - run:
           name: Wait for deployment
           command: |
