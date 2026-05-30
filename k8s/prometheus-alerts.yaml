@@ -1,0 +1,61 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: todo-app-alert-rules
+  namespace: monitoring
+  labels:
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: todo-app-resource-alerts
+    rules:
+    # 1. Individual Pod CPU Check
+    - alert: PodCpuUtilizationHigh
+      expr: sum(rate(container_cpu_usage_seconds_total{container!="", namespace="todo-app"}[5m])) by (pod) / sum(kube_pod_container_resource_limits{resource="cpu", namespace="todo-app"}) by (pod) * 100 > 80
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU utilization on Pod {{ $labels.pod }}"
+        description: "Pod {{ $labels.pod }} is utilizing over 80% of its resource limit bounds for 5+ minutes."
+
+    # 2. Individual Pod Memory Check (OOM Protection)
+    - alert: PodMemoryUtilizationHigh
+      expr: sum(container_memory_working_set_bytes{container!="", namespace="todo-app"}) by (pod) / sum(kube_pod_container_resource_limits{resource="memory", namespace="todo-app"}) by (pod) * 100 > 85
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High Memory utilization on Pod {{ $labels.pod }}"
+        description: "Pod {{ $labels.pod }} memory space is above 85%. Nearing Out-of-Memory cluster eviction threshold."
+
+    # 3. CrashLoopBackOff Verification
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total{namespace="todo-app"}[5m]) * 60 > 2
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} is looping structural failures"
+        description: "Pipeline deployment variant container has broken runtime operations and restarted repeatedly."
+
+    # 4. HPA Scalability Limit Reached
+    - alert: HpaAtMaxCapacity
+      expr: kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler="todo-app-hpa"} == kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler="todo-app-hpa"}
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "HPA {{ $labels.horizontalpodautoscaler }} maxed out"
+        description: "The scaling engine has maxed out resource pod limits. Application traffic surges may now degrade availability."
+
+    # 5. Production Addition: Synthetic Availability (Load Balancer Status)
+    - alert: ApplicationHttpDown
+      expr: probe_success{instance="http://todo-app-service.todo-app.svc.cluster.local"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "ToDo Web Frontend Inaccessible"
+        description: "Internal cluster endpoints or the exterior AWS Load Balancer are rejecting HTTP ingress channels."

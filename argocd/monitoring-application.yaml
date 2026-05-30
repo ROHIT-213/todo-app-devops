@@ -1,0 +1,57 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://prometheus-community.github.io/helm-charts'
+    chart: kube-prometheus-stack
+    targetRevision: 70.4.1    # Uses stable chart track definitions
+    helm:
+      values: |
+        alertmanager:
+          config:
+            global:
+              resolve_timeout: 5m
+            route:
+              receiver: 'slack-notifications'
+            receivers:
+              - name: 'slack-notifications'
+                slack_configs:
+                  - channel: '#alerts-devops'
+                    api_url: ${SLACK_WEBHOOK_URL}
+                    send_resolved: true
+        prometheus:
+          prometheusSpec:
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp2
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
+        grafana:
+          enabled: true
+          admin:
+            # Grafana extracts its admin credentials directly from our secret keys
+            existingSecret: monitoring-credentials
+            userKey: admin-user
+            passwordKey: ${GRAFANA_ADMIN_PASSWORD}
+          persistence:
+            enabled: true
+            storageClassName: gp2
+            accessModes: ["ReadWriteOnce"]
+            size: 5Gi
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    createNamespace: true
+    syncOptions:
+      - ServerSideApply=true # Crucial flag to prevent CRD schema size restriction errors
