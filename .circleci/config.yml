@@ -77,7 +77,6 @@ jobs:
     description: Deploy AWS infrastructure using Terraform
     docker:
       - image: hashicorp/terraform:latest
-      # - image: cimg/base:stable
     steps:
       - checkout
       - aws-cli/setup
@@ -104,7 +103,6 @@ jobs:
   apply_infrastructure:
     description: Apply Terraform changes to AWS
     docker:
-      # - image: cimg/base:stable
       - image: hashicorp/terraform:latest
     steps:
       - checkout
