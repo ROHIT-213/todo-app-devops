@@ -54,4 +54,5 @@ spec:
       selfHeal: true
     createNamespace: true
     syncOptions:
-      - ServerSideApply=true # Crucial flag to prevent CRD schema size restriction errors
+      - CreateNamespace=true
+      # - ServerSideApply=true # Crucial flag to prevent CRD schema size restriction errors
