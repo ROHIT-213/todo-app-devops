@@ -9,15 +9,15 @@ metadata:
 spec:
   groups:
   - name: todo-app-alerts
-      rules:
-        - alert: TodoAppPodDown
-          expr: kube_pod_status_phase{phase="Failed", namespace="todo-app"} > 0
-          for: 1m
-          labels:
-            severity: critical
-          annotations:
-            summary: "Todo App Pod is Down!"
-            description: "A pod in the todo-app namespace has failed."
+    rules:
+      - alert: TodoAppPodDown
+        expr: kube_pod_status_phase{phase="Failed", namespace="todo-app"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Todo App Pod is Down!"
+          description: "A pod in the todo-app namespace has failed."
   - name: todo-app-resource-alerts
     rules:
     # 1. Individual Pod CPU Check
