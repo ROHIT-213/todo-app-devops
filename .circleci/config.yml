@@ -199,6 +199,12 @@ jobs:
       - checkout
       - attach_workspace:
           at: .
+      # --- ADDING STEPS TO FIX THE UNZIP ERROR ---
+      - run:
+          name: Install System Utilities (unzip)
+          command: |
+            sudo apt-get update && sudo apt-get install -y unzip
+      # --------------------------------------------
       - aws-cli/setup
       - run:
           name: Install kubectl
@@ -236,7 +242,7 @@ jobs:
 
             echo "Waiting for application to sync..."
 
-            argocd app wait todo-app --grpc-web --timeout 300
+            argocd app wait todo-app --grpc-web --timeout 180
       - run:
           name: Wait for deployment
           command: |
