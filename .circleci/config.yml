@@ -156,7 +156,7 @@ jobs:
 
             # 7. Apply the declarative monitoring manifests
             kubectl apply -f argocd/monitoring-application.yaml
-            kubectl apply -f k8s/prometheus-alerts.yaml
+            # kubectl apply -f k8s/prometheus-alerts.yaml
       # =========================================================================
       - persist_to_workspace:
           root: .
