@@ -39,17 +39,18 @@ spec:
                     requests:
                       storage: 10Gi
         grafana:
-          enabled: true
+          persistence:
+            enabled: false # Disable default Grafana deployment since we will deploy it separately with our custom admin credentials
           admin:
             # Grafana extracts its admin credentials directly from our secret keys
             existingSecret: monitoring-credentials
             userKey: admin-user
             passwordKey: grafana-password
-          persistence:
-            enabled: true
-            storageClassName: gp2
-            accessModes: ["ReadWriteOnce"]
-            size: 5Gi
+          # persistence:
+          #   enabled: true
+          #   storageClassName: gp2
+          #   accessModes: ["ReadWriteOnce"]
+          #   size: 5Gi
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: monitoring
