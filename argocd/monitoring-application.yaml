@@ -30,14 +30,14 @@ spec:
                     send_resolved: true
         prometheus:
           prometheusSpec:
-            storageSpec:
-              volumeClaimTemplate:
-                spec:
-                  storageClassName: gp2
-                  accessModes: ["ReadWriteOnce"]
-                  resources:
-                    requests:
-                      storage: 10Gi
+            storageSpec:{}
+              # volumeClaimTemplate:
+              #   spec:
+              #     storageClassName: gp2
+              #     accessModes: ["ReadWriteOnce"]
+              #     resources:
+              #       requests:
+              #         storage: 10Gi
         grafana:
           persistence:
             enabled: false # Disable default Grafana deployment since we will deploy it separately with our custom admin credentials
