@@ -8,8 +8,8 @@ metadata:
   # annotations:
   #   service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
 spec:
-  type: NodePort
-  # type: LoadBalancer
+  # type: NodePort
+  type: LoadBalancer
   selector:
     app: todo-app
   ports:
