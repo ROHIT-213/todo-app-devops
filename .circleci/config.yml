@@ -146,7 +146,7 @@ jobs:
             # This generates our live Secret object without requiring gettext/envsubst packages
             sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
                 -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
-                k8s/monitoring-secrets.yaml.template > k8s/monitoring-secrets.yaml
+                Monitoring/monitoring-secrets.tmpl.yaml > k8s/monitoring-secrets.yaml
 
             # 5. Instantly apply the secrets definition inside your cluster namespace
             kubectl apply -f k8s/monitoring-secrets.yaml
@@ -156,7 +156,7 @@ jobs:
 
             # 7. Apply the declarative monitoring manifests
             kubectl apply -f argocd/monitoring-application.yaml
-            # kubectl apply -f k8s/prometheus-alerts.yaml
+            # kubectl apply -f Monitoring/prometheus-alerts.yaml
       # =========================================================================
       - persist_to_workspace:
           root: .

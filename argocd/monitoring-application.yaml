@@ -12,6 +12,11 @@ spec:
     helm:
       values: |
         alertmanager:
+          alertmanagerSpec:
+            # --- FIX: Injects your secret keys as system environment variables inside the pod ---
+            envFrom:
+              - secretRef:
+                  name: monitoring-credentials
           config:
             global:
               resolve_timeout: 5m
@@ -39,7 +44,7 @@ spec:
             # Grafana extracts its admin credentials directly from our secret keys
             existingSecret: monitoring-credentials
             userKey: admin-user
-            passwordKey: ${GRAFANA_ADMIN_PASSWORD}
+            passwordKey: grafana-password
           persistence:
             enabled: true
             storageClassName: gp2
