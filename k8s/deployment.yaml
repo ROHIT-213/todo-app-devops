@@ -37,8 +37,8 @@ spec:
       
       containers:
       - name: todo-app
-        image: rohit213/project-app:cabe293be9a47bd43f89311dc7c2646a1ada9ed7
-        # image: rohit213/project-app:cabe293be9a47bd43f89311dc7c2646a1ada9ed7
+        image: rohit213/project-app:8d2aa049114a421ab09821da08d28f4663fd890e
+        # image: rohit213/project-app:8d2aa049114a421ab09821da08d28f4663fd890e
         imagePullPolicy: Always
         ports:
         - name: http
