@@ -8,12 +8,11 @@ spec:
   source:
     repoURL: 'https://prometheus-community.github.io/helm-charts'
     chart: kube-prometheus-stack
-    targetRevision: 70.4.1    # Uses stable chart track definitions
+    targetRevision: 70.4.1
     helm:
       values: |
         alertmanager:
           alertmanagerSpec:
-            # --- FIX: Injects your secret keys as system environment variables inside the pod ---
             envFrom:
               - secretRef:
                   name: monitoring-credentials
@@ -30,27 +29,14 @@ spec:
                     send_resolved: true
         prometheus:
           prometheusSpec:
-            storageSpec:{}
-              # volumeClaimTemplate:
-              #   spec:
-              #     storageClassName: gp2
-              #     accessModes: ["ReadWriteOnce"]
-              #     resources:
-              #       requests:
-              #         storage: 10Gi
+            storageSpec: {}
         grafana:
-          persistence:
-            enabled: false # Disable default Grafana deployment since we will deploy it separately with our custom admin credentials
           admin:
-            # Grafana extracts its admin credentials directly from our secret keys
             existingSecret: monitoring-credentials
             userKey: admin-user
             passwordKey: grafana-password
-          # persistence:
-          #   enabled: true
-          #   storageClassName: gp2
-          #   accessModes: ["ReadWriteOnce"]
-          #   size: 5Gi
+          persistence:
+            enabled: false
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: monitoring
@@ -58,8 +44,74 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    # createNamespace: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true # Crucial flag to prevent CRD schema size restriction errors
+      - ServerSideApply=true
       - Replace=true
+
+      
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: kube-prometheus-stack
+#   namespace: argocd
+# spec:
+#   project: default
+#   source:
+#     repoURL: 'https://prometheus-community.github.io/helm-charts'
+#     chart: kube-prometheus-stack
+#     targetRevision: 70.4.1    # Uses stable chart track definitions
+#     helm:
+#       values: |
+#         alertmanager:
+#           alertmanagerSpec:
+#             # --- FIX: Injects your secret keys as system environment variables inside the pod ---
+#             envFrom:
+#               - secretRef:
+#                   name: monitoring-credentials
+#           config:
+#             global:
+#               resolve_timeout: 5m
+#             route:
+#               receiver: 'slack-notifications'
+#             receivers:
+#               - name: 'slack-notifications'
+#                 slack_configs:
+#                   - channel: '#alerts-devops'
+#                     api_url: ${SLACK_WEBHOOK_URL}
+#                     send_resolved: true
+#         prometheus:
+#           prometheusSpec:
+#             storageSpec:{}
+#               # volumeClaimTemplate:
+#               #   spec:
+#               #     storageClassName: gp2
+#               #     accessModes: ["ReadWriteOnce"]
+#               #     resources:
+#               #       requests:
+#               #         storage: 10Gi
+#         grafana:
+#           persistence:
+#             enabled: false # Disable default Grafana deployment since we will deploy it separately with our custom admin credentials
+#           admin:
+#             # Grafana extracts its admin credentials directly from our secret keys
+#             existingSecret: monitoring-credentials
+#             userKey: admin-user
+#             passwordKey: grafana-password
+#           # persistence:
+#           #   enabled: true
+#           #   storageClassName: gp2
+#           #   accessModes: ["ReadWriteOnce"]
+#           #   size: 5Gi
+#   destination:
+#     server: 'https://kubernetes.default.svc'
+#     namespace: monitoring
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+#     # createNamespace: true
+#     syncOptions:
+#       - CreateNamespace=true
+#       - ServerSideApply=true # Crucial flag to prevent CRD schema size restriction errors
+#       - Replace=true
