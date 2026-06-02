@@ -61,3 +61,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true # Crucial flag to prevent CRD schema size restriction errors
+      - Replace=true
