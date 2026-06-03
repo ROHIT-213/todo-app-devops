@@ -87,6 +87,8 @@ kube-prometheus-stack:
               # Evaluates the environment variable injected by envFrom at runtime
               api_url: '${SLACK_WEBHOOK_URL}'
               send_resolved: true
+  crds:
+    enabled: false
 
 
 
