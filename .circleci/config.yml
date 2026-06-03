@@ -64,7 +64,8 @@ jobs:
       - run:
           name: Push Docker image 
           command: | 
-            docker push rohit213/project-app:$CIRCLE_SHA1 
+            docker push your-dockerhub-username/project-app:${CIRCLE_SHA1:0:7}
+            # docker push rohit213/project-app:$CIRCLE_SHA1 
             docker push rohit213/project-app:latest
       
       - attach_workspace:
