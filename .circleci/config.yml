@@ -262,7 +262,19 @@ jobs:
             
             # 6. Deploy Wrapper Prometheus Stack Application
             kubectl apply -f argocd/monitoring-application.yaml
-            
+
+            # =========================================================================
+            # ⏳ WAIT GATE: Give ArgoCD time to inject CustomResourceDefinitions
+            # =========================================================================
+            echo "Waiting for ArgoCD to register Prometheus CRDs in the EKS cluster..."
+            for i in {1..20}; do
+              if kubectl get crd prometheusrules.monitoring.coreos.com >/dev/null 2>&1; then
+                echo "Prometheus CRDs successfully registered by ArgoCD!"
+                break
+              fi
+              echo "CRDs aren't live yet. Retrying in 5 seconds ($i/20)..."
+              sleep 5
+            done
             # 7. Apply Custom Prometheus Alert Rules
             if [ -f "Monitoring/prometheus-alerts.yaml" ]; then
               kubectl apply -f Monitoring/prometheus-alerts.yaml
