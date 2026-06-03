@@ -125,39 +125,39 @@ jobs:
             cd terraform
             terraform output -json > ../terraform_outputs.json
 
-      # # =========================================================================
-      # # AUTOMATED SECURE MONITORING DEPLOYMENT EXTRA STEP
-      # # =========================================================================
-      # - run:
-      #     name: Deploy Secure Observability & Alerting Stack
-      #     command: |
-      #       # 1. Download and configure kubectl manually inside this Terraform runner environment
-      #       curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-      #       chmod +x kubectl
-      #       sudo mv kubectl /usr/local/bin/
+      # =========================================================================
+      # AUTOMATED SECURE MONITORING DEPLOYMENT EXTRA STEP
+      # =========================================================================
+      - run:
+          name: Deploy Secure Observability & Alerting Stack
+          command: |
+            # 1. Download and configure kubectl manually inside this Terraform runner environment
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x kubectl
+            sudo mv kubectl /usr/local/bin/
 
-      #       # 2. Authenticate with your freshly provisioned AWS EKS cluster
-      #       aws eks update-kubeconfig --region ap-south-1 --name todo-app-eks
+            # 2. Authenticate with your freshly provisioned AWS EKS cluster
+            aws eks update-kubeconfig --region ap-south-1 --name todo-app-eks
 
-      #       # 3. Pre-create monitoring namespace if it doesn't exist
-      #       kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+            # 3. Pre-create monitoring namespace if it doesn't exist
+            kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
 
-      #       # 4. Use an inline sed parsing method to replace placeholders securely
-      #       # This generates our live Secret object without requiring gettext/envsubst packages
-      #       sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
-      #           -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
-      #           Monitoring/monitoring-secrets.tmpl.yaml > k8s/monitoring-secrets.yaml
+            # 4. Use an inline sed parsing method to replace placeholders securely
+            # This generates our live Secret object without requiring gettext/envsubst packages
+            sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
+                -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
+                Monitoring/monitoring-secrets.tmpl.yaml > k8s/monitoring-secrets.yaml
 
-      #       # 5. Instantly apply the secrets definition inside your cluster namespace
-      #       kubectl apply -f k8s/monitoring-secrets.yaml
+            # 5. Instantly apply the secrets definition inside your cluster namespace
+            kubectl apply -f k8s/monitoring-secrets.yaml
 
-      #       # 6. Clean up the parsed file from disk memory space immediately for security
-      #       rm k8s/monitoring-secrets.yaml
+            # 6. Clean up the parsed file from disk memory space immediately for security
+            rm k8s/monitoring-secrets.yaml
 
-      #       # 7. Apply the declarative monitoring manifests
-      #       kubectl apply -f argocd/monitoring-application.yaml
-      #       # kubectl apply -f Monitoring/prometheus-alerts.yaml
-      # # =========================================================================
+            # 7. Apply the declarative monitoring manifests
+            kubectl apply -f argocd/monitoring-application.yaml
+            # kubectl apply -f Monitoring/prometheus-alerts.yaml
+      # =========================================================================
       - persist_to_workspace:
           root: .
           paths:
@@ -226,27 +226,6 @@ jobs:
           name: Create ArgoCD Application
           command: |
             kubectl apply -f argocd/application.yaml
-      # =========================================================================
-      # MONITORING CREATION & INJECTION (RUNNING ON MAIN BRANCH)
-      # =========================================================================
-      - run:
-          name: Deploy Secure Observability Secret & Application
-          command: |
-            # 1. Pre-create monitoring namespace if it doesn't exist
-            kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-
-            # 2. Parse secrets template safely using lowercase paths
-            sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
-                -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
-                monitoring/monitoring-secrets.tmpl.yaml > monitoring/monitoring-secrets.yaml
-
-            # 3. Apply the dynamic runtime credentials
-            kubectl apply -f monitoring/monitoring-secrets.yaml
-            rm monitoring/monitoring-secrets.yaml
-
-            # 4. Deploy the declarative monitoring tool app into ArgoCD
-            kubectl apply -f argocd/monitoring-application.yaml
-      # =========================================================================
       - run:
           name: Login to ArgoCD
           command: |
