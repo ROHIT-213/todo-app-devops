@@ -222,10 +222,54 @@ jobs:
           name: Configure kubectl
           command: |
             aws eks update-kubeconfig --region $AWS_REGION --name todo-app-eks
+      # =========================================================================
+      # 🚀 EXTRA STEP: DEPLOY SECURE OBSERVABILITY SECRETS & APP-PROJECT
+      # =========================================================================
       - run:
-          name: Create ArgoCD Application
+          name: Pre-stage Monitoring Dependencies & Secrets
           command: |
+            # 1. Pre-create monitoring namespace
+            kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+            # 2. Inject secrets securely using your template (checking for folder case sensitivity)
+            if [ -d "Monitoring" ]; then
+              sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
+                  -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
+                  Monitoring/monitoring-secrets.tmpl.yaml > monitoring-secrets.yaml
+            else
+              sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
+                  -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
+                  monitoring/monitoring-secrets.tmpl.yaml > monitoring-secrets.yaml
+            fi
+            
+            kubectl apply -f monitoring-secrets.yaml
+            rm monitoring-secrets.yaml
+
+            # 3. Apply the AppProject FIRST so ArgoCD recognizes the 'monitoring' project environment
+            kubectl apply -f argocd/project1.yaml
+
+      # =========================================================================
+      # 🛠️ APPLY ALL ARGOCD APPLICATION MANIFESTS
+      # =========================================================================
+      - run:
+          name: Create ArgoCD Applications
+          command: |
+            # 4. Deploy Core App
             kubectl apply -f argocd/application.yaml
+            
+            # 5. Deploy Prometheus CRDs Application First (Prevents sync timeout loops)
+            kubectl apply -f argocd/crd.yml
+            
+            # 6. Deploy Wrapper Prometheus Stack Application
+            kubectl apply -f argocd/monitoring-application.yaml
+            
+            # 7. Apply Custom Prometheus Alert Rules
+            if [ -f "Monitoring/prometheus-alerts.yaml" ]; then
+              kubectl apply -f Monitoring/prometheus-alerts.yaml
+            else
+              kubectl apply -f monitoring/prometheus-alerts.yaml
+            fi
+      
       - run:
           name: Login to ArgoCD
           command: |
@@ -234,6 +278,22 @@ jobs:
             --password $ARGOCD_PASSWORD \
             --insecure \
             --grpc-web
+      
+      # =========================================================================
+      # 🔄 SYNC AND VALIDATE ALL TRACKED APPLICATION CARDS
+      # =========================================================================
+      # - run:
+      #     name: Create ArgoCD Application
+      #     command: |
+      #       kubectl apply -f argocd/application.yaml
+      # - run:
+      #     name: Login to ArgoCD
+      #     command: |
+      #       argocd login $ARGOCD_SERVER \
+      #       --username admin \
+      #       --password $ARGOCD_PASSWORD \
+      #       --insecure \
+      #       --grpc-web
       - run:
           name: Sync ArgoCD Application
           command: |
