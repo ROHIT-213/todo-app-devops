@@ -258,7 +258,7 @@ jobs:
             kubectl apply -f argocd/application.yaml
             
             # 5. Deploy Prometheus CRDs Application First (Prevents sync timeout loops)
-            kubectl apply -f argocd/crd.yml
+            kubectl apply -f argocd/crd.yaml
             
             # 6. Deploy Wrapper Prometheus Stack Application
             kubectl apply -f argocd/monitoring-application.yaml
