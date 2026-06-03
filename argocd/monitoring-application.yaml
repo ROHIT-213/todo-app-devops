@@ -46,11 +46,6 @@ spec:
             passwordKey: grafana-password
           persistence:
             enabled: false
-
-          # image:
-          #   repository: grafana/grafana
-          #   tag: 9.5.15
-          
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: monitoring
