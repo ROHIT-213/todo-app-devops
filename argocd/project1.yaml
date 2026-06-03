@@ -6,7 +6,7 @@ metadata:
 spec:
   description: Monitoring stack applications
   sourceRepos:
-    - https://github.com/your-org/gitops-repo.git
+    - https://github.com/ROHIT-213/todo-app-devops.git
     - https://github.com/prometheus-operator/prometheus-operator.git
   destinations:
     - namespace: monitoring
