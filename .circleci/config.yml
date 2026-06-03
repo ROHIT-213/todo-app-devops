@@ -54,7 +54,8 @@ jobs:
       - run:
           name: Build Docker image
           command: |
-            docker build -t rohit213/project-app:$CIRCLE_SHA1 .
+            docker build --no-cache -t rohit213/project-app:${CIRCLE_SHA1:0:7} .
+            # docker build -t rohit213/project-app:$CIRCLE_SHA1 .
             docker tag rohit213/project-app:$CIRCLE_SHA1 rohit213/project-app:latest
       - run:
           name: DockerHub Login 
