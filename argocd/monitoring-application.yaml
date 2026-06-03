@@ -3,6 +3,8 @@ kind: Application
 metadata:
   name: kube-prometheus-stack
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
   source:
@@ -29,7 +31,14 @@ spec:
                     send_resolved: true
         prometheus:
           prometheusSpec:
-            storageSpec: {}
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp2
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
         grafana:
           admin:
             existingSecret: monitoring-credentials
@@ -37,6 +46,11 @@ spec:
             passwordKey: grafana-password
           persistence:
             enabled: false
+
+          # image:
+          #   repository: grafana/grafana
+          #   tag: 9.5.15
+          
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: monitoring
@@ -47,7 +61,7 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
-      - Replace=true
+      # - Replace=true
 
       
 # apiVersion: argoproj.io/v1alpha1
