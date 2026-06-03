@@ -1,0 +1,158 @@
+# monitoring/values.yaml
+kube-prometheus-stack:
+
+  # Prometheus Configuration
+
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      retentionSize: "40GB"
+      resources:
+        requests:
+          memory: 2Gi
+          cpu: 500m
+        limits:
+          memory: 4Gi
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: gp3
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+      # Scrape all ServiceMonitors across all namespaces
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+
+
+  # Grafana Configuration
+  
+  grafana:
+    admin:
+      existingSecret: monitoring-credentials
+      userKey: admin-user
+      passwordKey: grafana-password
+    persistence:
+      enabled: true
+      storageClassName: gp3
+      accessModes: ["ReadWriteOnce"]
+      size: 10Gi
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: default
+            orgId: 1
+            folder: ""
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/default
+
+
+  # Alertmanager Configuration
+ 
+  alertmanager:
+    alertmanagerSpec:
+      # Inject secret keys as system environment variables inside the Alertmanager pod
+      envFrom:
+        - secretRef:
+            name: monitoring-credentials
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: gp3
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 10Gi
+    
+    # Global routing configuration and Slack notification receiver definition
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ['alertname', 'cluster', 'service']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        receiver: 'slack-notifications'
+      receivers:
+        - name: 'slack-notifications'
+          slack_configs:
+            - channel: '#alerts-devops'
+              # Evaluates the environment variable injected by envFrom at runtime
+              api_url: '${SLACK_WEBHOOK_URL}'
+              send_resolved: true
+
+
+
+
+
+
+
+
+
+
+# # monitoring/values.yaml
+# kube-prometheus-stack:
+#   # Prometheus configuration
+#   prometheus:
+#     prometheusSpec:
+#       retention: 15d
+#       retentionSize: "40GB"
+#       resources:
+#         requests:
+#           memory: 2Gi
+#           cpu: 500m
+#         limits:
+#           memory: 4Gi
+#       storageSpec:
+#         volumeClaimTemplate:
+#           spec:
+#             storageClassName: gp3
+#             accessModes: ["ReadWriteOnce"]
+#             resources:
+#               requests:
+#                 storage: 50Gi
+#       # Scrape all ServiceMonitors across namespaces
+#       serviceMonitorSelectorNilUsesHelmValues: false
+#       podMonitorSelectorNilUsesHelmValues: false
+#       ruleSelectorNilUsesHelmValues: false
+
+#   # Grafana configuration
+#   grafana:
+#     admin:
+#       existingSecret: monitoring-credentials
+#       userKey: admin-user
+#       passwordKey: grafana-password
+#     persistence:
+#       enabled: true
+#       size: 10Gi
+#     dashboardProviders:
+#       dashboardproviders.yaml:
+#         apiVersion: 1
+#         providers:
+#           - name: default
+#             orgId: 1
+#             folder: ""
+#             type: file
+#             disableDeletion: false
+#             editable: true
+#             options:
+#               path: /var/lib/grafana/dashboards/default
+
+#   # Alertmanager configuration
+#   alertmanager:
+#     alertmanagerSpec:
+#       storage:
+#         volumeClaimTemplate:
+#           spec:
+#             storageClassName: gp3
+#             accessModes: ["ReadWriteOnce"]
+#             resources:
+#               requests:
+#                 storage: 10Gi

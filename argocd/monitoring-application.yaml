@@ -1,54 +1,23 @@
+# argocd/monitoring-application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: kube-prometheus-stack
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default
+  project: monitoring
   source:
-    repoURL: 'https://prometheus-community.github.io/helm-charts'
-    chart: kube-prometheus-stack
-    targetRevision: 70.4.1
+    repoURL: https://github.com/ROHIT-213/todo-app-devops.git
+    targetRevision: main
+    path: monitoring/kube-prometheus-stack
     helm:
-      values: |
-        alertmanager:
-          alertmanagerSpec:
-            envFrom:
-              - secretRef:
-                  name: monitoring-credentials
-          config:
-            global:
-              resolve_timeout: 5m
-            route:
-              receiver: 'slack-notifications'
-            receivers:
-              - name: 'slack-notifications'
-                slack_configs:
-                  - channel: '#alerts-devops'
-                    api_url: ${SLACK_WEBHOOK_URL}
-                    send_resolved: true
-        prometheus:
-          prometheusSpec:
-            storageSpec:
-              volumeClaimTemplate:
-                spec:
-                  storageClassName: gp2
-                  accessModes:
-                    - ReadWriteOnce
-                  resources:
-                    requests:
-                      storage: 10Gi
-        grafana:
-          admin:
-            existingSecret: monitoring-credentials
-            userKey: admin-user
-            passwordKey: grafana-password
-          persistence:
-            enabled: false
+      valueFiles:
+        - values.yaml
+        - values-production.yaml
   destination:
-    server: 'https://kubernetes.default.svc'
+    server: https://kubernetes.default.svc
     namespace: monitoring
   syncPolicy:
     automated:
@@ -57,7 +26,87 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
-      # - Replace=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions:
+        - '.webhooks[]?.clientConfig.caBundle'
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      jqPathExpressions:
+        - '.webhooks[]?.clientConfig.caBundle'
+
+
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: kube-prometheus-stack
+#   namespace: argocd
+#   finalizers:
+#     - resources-finalizer.argocd.argoproj.io
+#   # annotations:
+#   #   argocd.argoproj.io/sync-wave: "1"
+# spec:
+#   project: monitoring
+#   # project: default
+#   source:
+#     repoURL: 'https://prometheus-community.github.io/helm-charts'
+#     chart: kube-prometheus-stack
+#     targetRevision: 70.4.1
+#     helm:
+#       values: |
+#         alertmanager:
+#           alertmanagerSpec:
+#             envFrom:
+#               - secretRef:
+#                   name: monitoring-credentials
+#           config:
+#             global:
+#               resolve_timeout: 5m
+#             route:
+#               receiver: 'slack-notifications'
+#             receivers:
+#               - name: 'slack-notifications'
+#                 slack_configs:
+#                   - channel: '#alerts-devops'
+#                     api_url: ${SLACK_WEBHOOK_URL}
+#                     send_resolved: true
+#         prometheus:
+#           prometheusSpec:
+#             storageSpec:
+#               volumeClaimTemplate:
+#                 spec:
+#                   storageClassName: gp2
+#                   accessModes:
+#                     - ReadWriteOnce
+#                   resources:
+#                     requests:
+#                       storage: 10Gi
+#         grafana:
+#           admin:
+#             existingSecret: monitoring-credentials
+#             userKey: admin-user
+#             passwordKey: grafana-password
+#           persistence:
+#             enabled: false
+#   destination:
+#     server: 'https://kubernetes.default.svc'
+#     namespace: monitoring
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+#     syncOptions:
+#       - CreateNamespace=true
+#       - ServerSideApply=true
+#       # - Replace=true
 
       
 # apiVersion: argoproj.io/v1alpha1
