@@ -16,6 +16,8 @@ spec:
       valueFiles:
         - values.yaml
       parameters:
+        - name: grafana.persistence.enabled
+          value: "true"
         - name: grafana.persistence.storageClassName
           value: "gp2"
       skipCrds: true           # Important to prevent ArgoCD from trying to manage CRDs directly, which can cause sync issues
