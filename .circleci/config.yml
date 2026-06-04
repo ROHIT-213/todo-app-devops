@@ -308,15 +308,31 @@ jobs:
       #       --password $ARGOCD_PASSWORD \
       #       --insecure \
       #       --grpc-web
+      # - run:
+      #     name: Sync ArgoCD Application
+      #     command: |
+      #       echo "Starting ArgoCD sync..."
+      #       argocd app sync todo-app --grpc-web || true
+
+      #       echo "Waiting for application to sync..."
+
+      #       argocd app wait todo-app --grpc-web --timeout 180
       - run:
-          name: Sync ArgoCD Application
+          name: Sync ArgoCD Application and Monitoring Stack
           command: |
             echo "Starting ArgoCD sync..."
+            # 1. Sync the core todo application
             argocd app sync todo-app --grpc-web || true
+            
+            # 2. Sync the custom resource definitions first (Crucial step)
+            argocd app sync prometheus-crds --grpc-web || true
+            
+            # 3. Sync the main monitoring helm stack chart
+            argocd app sync kube-prometheus-stack --grpc-web || true
 
-            echo "Waiting for application to sync..."
-
+            echo "Waiting for applications to stabilize..."
             argocd app wait todo-app --grpc-web --timeout 180
+            argocd app wait kube-prometheus-stack --grpc-web --timeout 180
       - run:
           name: Wait for deployment
           command: |
