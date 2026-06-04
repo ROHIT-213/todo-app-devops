@@ -89,7 +89,22 @@ kube-prometheus-stack:
               send_resolved: true
   crds:
     enabled: true
+  coreDns:
+    enabled: true 
+    service:
+    enabled: false  # Disables creating the service in kube-system
 
+  kubeControllerManager:
+    enabled: false    # EKS manages this; you can safely turn it off
+
+  kubeScheduler:
+    enabled: false    # EKS manages this; turn it off
+
+  kubeEtcd:
+    enabled: false    # EKS manages this; turn it off
+
+  kubeProxy:
+    enabled: false    # Turn off or set service.enabled to false if it attempts targeting kube-system
 
 
 
