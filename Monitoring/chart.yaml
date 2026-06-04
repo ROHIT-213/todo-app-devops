@@ -9,3 +9,6 @@ dependencies:
   - name: kube-prometheus-stack
     version: "62.7.0"
     repository: "https://prometheus-community.github.io/helm-charts"
+
+# added to deploy kube-prometheus-stack with default values
+# you can override these values in values.yaml
