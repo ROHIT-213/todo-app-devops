@@ -16,7 +16,7 @@ kube-prometheus-stack:
       storageSpec:
         volumeClaimTemplate:
           spec:
-            storageClassName: gp3
+            storageClassName: gp2
             accessModes: ["ReadWriteOnce"]
             resources:
               requests:
@@ -36,7 +36,7 @@ kube-prometheus-stack:
       passwordKey: grafana-password
     persistence:
       enabled: true
-      storageClassName: gp3
+      storageClassName: gp2
       accessModes: ["ReadWriteOnce"]
       size: 10Gi
     dashboardProviders:
@@ -64,7 +64,7 @@ kube-prometheus-stack:
       storage:
         volumeClaimTemplate:
           spec:
-            storageClassName: gp3
+            storageClassName: gp2
             accessModes: ["ReadWriteOnce"]
             resources:
               requests:
