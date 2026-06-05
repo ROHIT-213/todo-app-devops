@@ -66,24 +66,24 @@ alertmanager:
               storage: 10Gi
 
   # Global routing configuration and Slack notification receiver definition
-  config:
-    global:
-      resolve_timeout: 5m
-    route:
-      group_by: ['alertname', 'cluster', 'service']
-      group_wait: 30s
-      group_interval: 5m
-      repeat_interval: 12h
-      receiver: 'slack-notifications'
-    receivers:
-      - name: 'slack-notifications'
-        slack_configs:
-          - channel: '#alerts-devops'
-            # Safely pulls the secret value directly out of your credentials secret object
-            api_url_secret:
-              name: monitoring-credentials
-              key: slack-webhook-url
-            send_resolved: true
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ['alertname', 'cluster', 'service']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        receiver: 'slack-notifications'
+      receivers:
+        - name: 'slack-notifications'
+          slack_configs:
+            - channel: '#alerts-devops'
+              # Safely pulls the secret value directly out of your credentials secret object
+              api_url_secret:
+                name: monitoring-credentials
+                key: slack-webhook-url
+              send_resolved: true
 
 crds:
   enabled: true
