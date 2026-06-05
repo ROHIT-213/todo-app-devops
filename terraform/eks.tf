@@ -70,31 +70,66 @@ resource "aws_cloudwatch_log_group" "eks" {
 }
 #suggested code by gemini to create the gp2 StorageClass mapped to the AWS EBS CSI Driver, which is required for dynamic provisioning of EBS volumes in EKS clusters. This allows Kubernetes to automatically create and manage EBS volumes for persistent storage when using the gp2 StorageClass.
 # Create the gp2 StorageClass mapped to the AWS EBS CSI Driver
-resource "kubernetes_storage_class_v1" "gp2" {
-  metadata {
-    name = "gp2"
+# resource "kubernetes_storage_class_v1" "gp2" {
+#   metadata {
+#     name = "gp2"
+#   }
+
+#   storage_provisioner = "ebs.csi.aws.com"
+#   volume_binding_mode = "WaitForFirstConsumer"
+#   reclaim_policy      = "Delete"
+
+#   parameters = {
+#     type = "gp3" # Upgrades your underlying disk to fast, cost-efficient GP3 volumes automatically
+#   }
+
+#   depends_on = [
+#     aws_eks_node_group.main
+#   ]
+# }
+
+# 1. Create a Trust Policy letting the EKS Add-on assume this role (gemini)
+data "aws_iam_policy_document" "ebs_csi_assume_role" {
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub"
+      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
+    }
   }
-
-  storage_provisioner = "ebs.csi.aws.com"
-  volume_binding_mode = "WaitForFirstConsumer"
-  reclaim_policy      = "Delete"
-
-  parameters = {
-    type = "gp3" # Upgrades your underlying disk to fast, cost-efficient GP3 volumes automatically
-  }
-
-  depends_on = [
-    aws_eks_node_group.main
-  ]
 }
 
+# 2. Create the IAM Role for the Add-on(gemini)
+resource "aws_iam_role" "eks_ebs_csi_driver" {
+  name               = "${var.cluster_name}-ebs-csi-driver-role"
+  assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume_role.json
+}
+# 3. Attach the official AWS EBS Driver Policy to this new role (gemini)
+resource "aws_iam_role_policy_attachment" "eks_ebs_csi_driver_attach" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.eks_ebs_csi_driver.name
+}                                                                                 #gemini
 # Deploy the native AWS EBS CSI Driver Add-on
 resource "aws_eks_addon" "ebs_csi" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "aws-ebs-csi-driver"
-
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "aws-ebs-csi-driver"
+  addon_version               = "v1.30.0-eksbuild.1" # Use your current version string
+  resolve_conflicts_on_update = "OVERWRITE"          # <--- ADD THIS LINE
+  resolve_conflicts_on_create = "OVERWRITE"          # <--- ADD THIS LINE (if using AWS provider v5.x)
+  
+  service_account_role_arn    = aws_iam_role.eks_ebs_csi_driver.arn  #added by gemini
   depends_on = [
-    aws_eks_node_group.main
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.eks_ebs_csi_driver_attach        #added by gemini
   ]
 }
 #code end of gemini suggestions for EBS CSI Driver and StorageClass
