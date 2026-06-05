@@ -56,7 +56,11 @@ kube-prometheus-stack:
   # Alertmanager Configuration
  
   alertmanager:
-    enabled: true   # Explicitly tell the chart to spin up the pods  (gemini)
+    persistence:
+      enabled: true
+      storageClassName: gp2
+      accessModes: ["ReadWriteOnce"]
+      size: 10Gi
     alertmanagerSpec:
       # Inject secret keys as system environment variables inside the Alertmanager pod
       envFrom:
