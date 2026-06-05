@@ -14,20 +14,22 @@ spec:
     - namespace: kube-system
       server: https://kubernetes.default.svc       #gemini
   clusterResourceWhitelist:
-    - group: ""
-      kind: Namespace
-    - group: ""
-      kind: Service  # Added to allow cross-namespace control plane service endpoints (gemini)
-    - group: apiextensions.k8s.io
-      kind: CustomResourceDefinition
-    - group: admissionregistration.k8s.io
-      kind: ValidatingWebhookConfiguration
-    - group: admissionregistration.k8s.io
-      kind: MutatingWebhookConfiguration
-    - group: rbac.authorization.k8s.io
-      kind: ClusterRole
-    - group: rbac.authorization.k8s.io
-      kind: ClusterRoleBinding
+    - group: "*"
+      kind: "*"
+    # - group: ""
+    #   kind: Namespace
+    # - group: ""
+    #   kind: Service  # Added to allow cross-namespace control plane service endpoints (gemini)
+    # - group: apiextensions.k8s.io
+    #   kind: CustomResourceDefinition
+    # - group: admissionregistration.k8s.io
+    #   kind: ValidatingWebhookConfiguration
+    # - group: admissionregistration.k8s.io
+    #   kind: MutatingWebhookConfiguration
+    # - group: rbac.authorization.k8s.io
+    #   kind: ClusterRole
+    # - group: rbac.authorization.k8s.io
+    #   kind: ClusterRoleBinding
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"
