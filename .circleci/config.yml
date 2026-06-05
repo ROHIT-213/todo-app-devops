@@ -327,12 +327,12 @@ jobs:
             # 2. Sync the custom resource definitions first (Crucial step)
             argocd app sync prometheus-crds --grpc-web || true
             
-            # 3. Sync the main monitoring helm stack chart
-            argocd app sync kube-prometheus-stack --grpc-web || true
+            # 3. Sync the main monitoring helm stack chart  (added --async gemini)
+            argocd app sync kube-prometheus-stack --grpc-web --async || true
 
             echo "Waiting for applications to stabilize..."
             argocd app wait todo-app --grpc-web --timeout 180
-            argocd app wait kube-prometheus-stack --grpc-web --timeout 180
+            argocd app wait kube-prometheus-stack --grpc-web --timeout 600
       - run:
           name: Wait for deployment
           command: |
