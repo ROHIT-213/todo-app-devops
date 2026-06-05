@@ -35,7 +35,7 @@ kube-prometheus-stack:
       userKey: admin-user
       passwordKey: grafana-password
     persistence:
-      enabled: false
+      enabled: true
       storageClassName: gp2
       accessModes: ["ReadWriteOnce"]
       size: 10Gi
