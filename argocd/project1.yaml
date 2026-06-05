@@ -12,12 +12,12 @@ spec:
     - namespace: monitoring
       server: https://kubernetes.default.svc
     - namespace: kube-system
-      server: https://kubernetes.default.svc
+      server: https://kubernetes.default.svc       #gemini
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
     - group: ""
-      kind: Service  # Added to allow cross-namespace control plane service endpoints
+      kind: Service  # Added to allow cross-namespace control plane service endpoints (gemini)
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
     - group: admissionregistration.k8s.io
