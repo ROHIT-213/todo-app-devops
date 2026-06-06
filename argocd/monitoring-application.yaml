@@ -8,19 +8,28 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: monitoring
-  source:
-    repoURL: https://github.com/ROHIT-213/todo-app-devops.git
-    targetRevision: main
-    path: Monitoring
-    helm:
-      valueFiles:
-        - values.yaml
-      parameters:
-        - name: grafana.persistence.enabled
-          value: "true"
-        - name: grafana.persistence.storageClassName
-          value: "gp2"
-      skipCrds: true           # Important to prevent ArgoCD from trying to manage CRDs directly, which can cause sync issues
+  
+  # === MULTI-SOURCE DEFINITION BLOCK ===
+  sources:
+    # Source 1: Pull the actual Helm templates from the official repository
+    - repoURL: 'https://prometheus-community.github.io/helm-charts'
+      chart: kube-prometheus-stack
+      targetRevision: 70.4.1   # Matches the track version from your commented sections
+      helm:
+        valueFiles:
+          - $values/Monitoring/values.yaml  # Points to the values file inside the Git reference below
+        parameters:
+          - name: grafana.persistence.enabled
+            value: "true"
+          - name: grafana.persistence.storageClassName
+            value: "gp2"
+        skipCrds: true
+
+    # Source 2: Reference your GitHub repository containing your values.yaml file
+    - repoURL: https://github.com/ROHIT-213/todo-app-devops.git
+      targetRevision: main
+      ref: values             # Binds this Git repo to the '$values' variable used above
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
@@ -47,6 +56,64 @@ spec:
       kind: ValidatingWebhookConfiguration
       jqPathExpressions:
         - .webhooks[].clientConfig.caBundle
+
+
+
+
+# gemini
+# # argocd/monitoring-application.yaml
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: kube-prometheus-stack
+#   namespace: argocd
+#   finalizers:
+#     - resources-finalizer.argocd.argoproj.io
+# spec:
+#   project: monitoring
+#   source:
+#     repoURL: https://github.com/ROHIT-213/todo-app-devops.git
+#     targetRevision: main
+#     path: APPCODE/Monitoring
+#     helm:
+#       valueFiles:
+#         - values.yaml
+#       parameters:
+#         - name: grafana.persistence.enabled
+#           value: "true"
+#         - name: grafana.persistence.storageClassName
+#           value: "gp2"
+#       skipCrds: true           # Important to prevent ArgoCD from trying to manage CRDs directly, which can cause sync issues
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: monitoring
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+#     syncOptions:
+#       - CreateNamespace=true
+#       - ServerSideApply=true
+#       - RespectIgnoreDifferences=true
+#     retry:
+#       limit: 5
+#       backoff:
+#         duration: 5s
+#         factor: 2
+#         maxDuration: 3m
+#   ignoreDifferences:
+#     - group: admissionregistration.k8s.io
+#       kind: MutatingWebhookConfiguration
+#       jqPathExpressions:
+#         - .webhooks[].clientConfig.caBundle
+#     - group: admissionregistration.k8s.io
+#       kind: ValidatingWebhookConfiguration
+#       jqPathExpressions:
+#         - .webhooks[].clientConfig.caBundle
+
+
+
+
     # - group: admissionregistration.k8s.io
     #   kind: MutatingWebhookConfiguration
     #   jqPathExpressions:
