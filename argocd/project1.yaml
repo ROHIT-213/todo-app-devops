@@ -8,6 +8,7 @@ spec:
   sourceRepos:
     - https://github.com/ROHIT-213/todo-app-devops.git
     - https://github.com/prometheus-operator/prometheus-operator.git
+    - https://prometheus-community.github.io/helm-charts
   destinations:
     - namespace: monitoring
       server: https://kubernetes.default.svc
