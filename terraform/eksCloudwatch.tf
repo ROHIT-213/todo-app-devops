@@ -50,8 +50,16 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.eks_container_registry_policy,
     aws_iam_role_policy_attachment.eks_ssm_policy,
     aws_iam_role_policy.node_dynamodb_s3_policy,
-    aws_iam_role_policy_attachment.eks_cloudwatch_agent_policy
+    aws_iam_role_policy_attachment.eks_cloudwatch_agent_policy,
+    # Add this line:
+    aws_iam_role_policy_attachment.eks_node_ebs_policy
   ]
+}
+
+# FIX: Explicitly attach the Amazon EBS CSI Driver policy to the Node Group Role
+resource "aws_iam_role_policy_attachment" "eks_node_ebs_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.eks_node_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cloudwatch_agent_policy" {
@@ -103,7 +111,7 @@ resource "aws_eks_addon" "ebs_csi" {
 
   # FIX: Forces AWS to overwrite and clear out the hanging/timed-out previous deployment states
   resolve_conflicts_on_update = "OVERWRITE"
-  
+
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_role_policy
