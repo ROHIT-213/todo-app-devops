@@ -172,9 +172,13 @@ jobs:
       - run:
           name: Install ArgoCD CLI
           command: |
-            curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+            ARGOCD_VERSION="v2.12.0"
+            curl -sSL --retry 5 --retry-delay 3 \
+              -o /tmp/argocd \
+              https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64
             chmod +x /tmp/argocd
             sudo mv /tmp/argocd /usr/local/bin/
+            argocd version --client
       - run:
           name: Configure kubectl
           command: |
