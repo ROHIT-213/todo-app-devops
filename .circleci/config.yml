@@ -24,7 +24,6 @@ jobs:
           key: v1-dependencies-{{ checksum "package.json" }}
       - run:
           name: Run tests
-          # command: npm test -- --coverage --watchAll=false
           command: npm test -- --watchAll=false --passWithNoTests
       - run:
           name: Build application
@@ -45,16 +44,12 @@ jobs:
       - checkout
       - attach_workspace:
           at: .
-      
-      # - setup_remote_docker:
-      #     version: 20.10.7
       - run:
           name: verify Docker
           command: docker --version
       - run:
           name: Build Docker image
           command: |
-            # docker build --no-cache -t rohit213/project-app:${CIRCLE_SHA1:0:7} .
             docker build -t rohit213/project-app:$CIRCLE_SHA1 .
             docker tag rohit213/project-app:$CIRCLE_SHA1 rohit213/project-app:latest
       - run:
@@ -64,12 +59,8 @@ jobs:
       - run:
           name: Push Docker image 
           command: | 
-            # docker push your-dockerhub-username/project-app:${CIRCLE_SHA1:0:7}
             docker push rohit213/project-app:$CIRCLE_SHA1 
             docker push rohit213/project-app:latest
-      
-      - attach_workspace:
-          at: .
       - persist_to_workspace:
           root: .
           paths:
@@ -126,40 +117,6 @@ jobs:
           command: |
             cd terraform
             terraform output -json > ../terraform_outputs.json
-
-      # =========================================================================
-      # AUTOMATED SECURE MONITORING DEPLOYMENT EXTRA STEP
-      # =========================================================================
-      - run:
-          name: Deploy Secure Observability & Alerting Stack
-          command: |
-            # 1. Download and configure kubectl manually inside this Terraform runner environment
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-            chmod +x kubectl
-            sudo mv kubectl /usr/local/bin/
-
-            # 2. Authenticate with your freshly provisioned AWS EKS cluster
-            aws eks update-kubeconfig --region ap-south-1 --name todo-app-eks
-
-            # 3. Pre-create monitoring namespace if it doesn't exist
-            kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-
-            # 4. Use an inline sed parsing method to replace placeholders securely
-            # This generates our live Secret object without requiring gettext/envsubst packages
-            sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
-                -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
-                Monitoring/monitoring-secrets.tmpl.yaml > k8s/monitoring-secrets.yaml
-
-            # 5. Instantly apply the secrets definition inside your cluster namespace
-            kubectl apply -f k8s/monitoring-secrets.yaml
-
-            # 6. Clean up the parsed file from disk memory space immediately for security
-            rm k8s/monitoring-secrets.yaml
-
-            # 7. Apply the declarative monitoring manifests
-            kubectl apply -f argocd/monitoring-application.yaml
-            # kubectl apply -f Monitoring/prometheus-alerts.yaml
-      # =========================================================================
       - persist_to_workspace:
           root: .
           paths:
@@ -201,12 +158,10 @@ jobs:
       - checkout
       - attach_workspace:
           at: .
-      # --- ADDING STEPS TO FIX THE UNZIP ERROR ---
       - run:
           name: Install System Utilities (unzip)
           command: |
             sudo apt-get update && sudo apt-get install -y unzip
-      # --------------------------------------------
       - aws-cli/setup
       - run:
           name: Install kubectl
@@ -224,16 +179,11 @@ jobs:
           name: Configure kubectl
           command: |
             aws eks update-kubeconfig --region $AWS_REGION --name todo-app-eks
-      # =========================================================================
-      # 🚀 EXTRA STEP: DEPLOY SECURE OBSERVABILITY SECRETS & APP-PROJECT
-      # =========================================================================
       - run:
           name: Pre-stage Monitoring Dependencies & Secrets
           command: |
-            # 1. Pre-create monitoring namespace
             kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
 
-            # 2. Inject secrets securely using your template (checking for folder case sensitivity)
             if [ -d "Monitoring" ]; then
               sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
                   -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
@@ -247,27 +197,14 @@ jobs:
             kubectl apply -f monitoring-secrets.yaml
             rm monitoring-secrets.yaml
 
-            # 3. Apply the AppProject FIRST so ArgoCD recognizes the 'monitoring' project environment
             kubectl apply -f argocd/project1.yaml
-
-      # =========================================================================
-      # 🛠️ APPLY ALL ARGOCD APPLICATION MANIFESTS
-      # =========================================================================
       - run:
           name: Create ArgoCD Applications
           command: |
-            # 4. Deploy Core App
             kubectl apply -f argocd/application.yaml
-            
-            # 5. Deploy Prometheus CRDs Application First (Prevents sync timeout loops)
             kubectl apply -f argocd/crd.yaml
-            
-            # 6. Deploy Wrapper Prometheus Stack Application
             kubectl apply -f argocd/monitoring-application.yaml
 
-            # =========================================================================
-            # ⏳ WAIT GATE: Give ArgoCD time to inject CustomResourceDefinitions
-            # =========================================================================
             echo "Waiting for ArgoCD to register Prometheus CRDs in the EKS cluster..."
             for i in {1..20}; do
               if kubectl get crd prometheusrules.monitoring.coreos.com >/dev/null 2>&1; then
@@ -277,13 +214,12 @@ jobs:
               echo "CRDs aren't live yet. Retrying in 5 seconds ($i/20)..."
               sleep 5
             done
-            # 7. Apply Custom Prometheus Alert Rules
+
             if [ -f "Monitoring/prometheus-alerts.yaml" ]; then
               kubectl apply -f Monitoring/prometheus-alerts.yaml
             else
               kubectl apply -f monitoring/prometheus-alerts.yaml
             fi
-      
       - run:
           name: Login to ArgoCD
           command: |
@@ -292,42 +228,14 @@ jobs:
             --password $ARGOCD_PASSWORD \
             --insecure \
             --grpc-web
-      
-      # =========================================================================
-      # 🔄 SYNC AND VALIDATE ALL TRACKED APPLICATION CARDS
-      # =========================================================================
-      # - run:
-      #     name: Create ArgoCD Application
-      #     command: |
-      #       kubectl apply -f argocd/application.yaml
-      # - run:
-      #     name: Login to ArgoCD
-      #     command: |
-      #       argocd login $ARGOCD_SERVER \
-      #       --username admin \
-      #       --password $ARGOCD_PASSWORD \
-      #       --insecure \
-      #       --grpc-web
-      # - run:
-      #     name: Sync ArgoCD Application
-      #     command: |
-      #       echo "Starting ArgoCD sync..."
-      #       argocd app sync todo-app --grpc-web || true
-
-      #       echo "Waiting for application to sync..."
-
-      #       argocd app wait todo-app --grpc-web --timeout 180
       - run:
           name: Sync ArgoCD Application and Monitoring Stack
           command: |
             echo "Starting ArgoCD sync..."
-            # 1. Sync the core todo application
             argocd app sync todo-app --grpc-web || true
             
-            # 2. Sync the custom resource definitions first (Crucial step)
-            argocd app sync prometheus-crds --grpc-web || true
-            
-            # 3. Sync the main monitoring helm stack chart  (added --async gemini)
+            # FIXED APPLICATION NAME MATCHES HERE:
+            argocd app sync prometheus-operator-crds --grpc-web || true
             argocd app sync kube-prometheus-stack --grpc-web --async || true
 
             echo "Waiting for applications to stabilize..."
@@ -340,7 +248,6 @@ jobs:
 
 workflows:
   version: 2
-  
   build_and_push:
     jobs:
       - build:
@@ -392,3 +299,403 @@ workflows:
           filters:
             branches:
               only: infrastructure
+
+
+
+
+
+# gemini
+# version: 2.1
+
+# orbs:
+#   aws-cli: circleci/aws-cli@3.1.3
+#   docker: circleci/docker@2.2.0
+
+# jobs:
+#   build:
+#     description: Build and test the application
+#     docker:
+#       - image: cimg/node:16.20
+#     steps:
+#       - checkout
+#       - restore_cache:
+#           keys:
+#             - v1-dependencies-{{ checksum "package.json" }}
+#             - v1-dependencies-
+#       - run:
+#           name: Install dependencies
+#           command: npm install
+#       - save_cache:
+#           paths:
+#             - node_modules
+#           key: v1-dependencies-{{ checksum "package.json" }}
+#       - run:
+#           name: Run tests
+#           # command: npm test -- --coverage --watchAll=false
+#           command: npm test -- --watchAll=false --passWithNoTests
+#       - run:
+#           name: Build application
+#           command: npm run build
+#       - persist_to_workspace:
+#           root: .
+#           paths:
+#             - build
+#             - package.json
+#             - Dockerfile
+#             - .dockerignore
+
+#   push_image:
+#     description: Build and push Docker image to registry
+#     machine:
+#       image: ubuntu-2204:current
+#     steps:
+#       - checkout
+#       - attach_workspace:
+#           at: .
+      
+#       # - setup_remote_docker:
+#       #     version: 20.10.7
+#       - run:
+#           name: verify Docker
+#           command: docker --version
+#       - run:
+#           name: Build Docker image
+#           command: |
+#             # docker build --no-cache -t rohit213/project-app:${CIRCLE_SHA1:0:7} .
+#             docker build -t rohit213/project-app:$CIRCLE_SHA1 .
+#             docker tag rohit213/project-app:$CIRCLE_SHA1 rohit213/project-app:latest
+#       - run:
+#           name: DockerHub Login 
+#           command: | 
+#             echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin
+#       - run:
+#           name: Push Docker image 
+#           command: | 
+#             # docker push your-dockerhub-username/project-app:${CIRCLE_SHA1:0:7}
+#             docker push rohit213/project-app:$CIRCLE_SHA1 
+#             docker push rohit213/project-app:latest
+      
+#       - attach_workspace:
+#           at: .
+#       - persist_to_workspace:
+#           root: .
+#           paths:
+#             - .
+
+#   deploy_infrastructure:
+#     description: Deploy AWS infrastructure using Terraform
+#     docker:
+#       - image: hashicorp/terraform:latest
+#     steps:
+#       - checkout
+#       - aws-cli/setup
+#       - run:
+#           name: Initialize Terraform
+#           command: |
+#             cd terraform
+#             terraform init -upgrade
+#       - run:
+#           name: Validate Terraform
+#           command: |
+#             cd terraform
+#             terraform validate
+#       - run:
+#           name: Plan Terraform
+#           command: |
+#             cd terraform
+#             terraform plan -var-file="terraform.tfvars" -out=tfplan
+#       - persist_to_workspace:
+#           root: .
+#           paths:
+#             - terraform/tfplan
+
+#   apply_infrastructure:
+#     description: Apply Terraform changes to AWS
+#     docker:
+#       - image: hashicorp/terraform:latest
+#     steps:
+#       - checkout
+#       - attach_workspace:
+#           at: .
+#       - aws-cli/setup
+#       - run:
+#           name: Initialize Terraform
+#           command: |
+#             cd terraform
+#             terraform init -upgrade
+#       - run:
+#           name: Apply Terraform
+#           command: |
+#             cd terraform
+#             terraform apply -auto-approve tfplan
+#       - run:
+#           name: Export Terraform outputs
+#           command: |
+#             cd terraform
+#             terraform output -json > ../terraform_outputs.json
+
+#       # =========================================================================
+#       # AUTOMATED SECURE MONITORING DEPLOYMENT EXTRA STEP
+#       # =========================================================================
+#       - run:
+#           name: Deploy Secure Observability & Alerting Stack
+#           command: |
+#             # 1. Download and configure kubectl manually inside this Terraform runner environment
+#             curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+#             chmod +x kubectl
+#             sudo mv kubectl /usr/local/bin/
+
+#             # 2. Authenticate with your freshly provisioned AWS EKS cluster
+#             aws eks update-kubeconfig --region ap-south-1 --name todo-app-eks
+
+#             # 3. Pre-create monitoring namespace if it doesn't exist
+#             kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+#             # 4. Use an inline sed parsing method to replace placeholders securely
+#             # This generates our live Secret object without requiring gettext/envsubst packages
+#             sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
+#                 -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
+#                 Monitoring/monitoring-secrets.tmpl.yaml > k8s/monitoring-secrets.yaml
+
+#             # 5. Instantly apply the secrets definition inside your cluster namespace
+#             kubectl apply -f k8s/monitoring-secrets.yaml
+
+#             # 6. Clean up the parsed file from disk memory space immediately for security
+#             rm k8s/monitoring-secrets.yaml
+
+#             # 7. Apply the declarative monitoring manifests
+#             kubectl apply -f argocd/monitoring-application.yaml
+#             # kubectl apply -f Monitoring/prometheus-alerts.yaml
+#       # =========================================================================
+#       - persist_to_workspace:
+#           root: .
+#           paths:
+#             - terraform_outputs.json
+
+#   update_k8s_manifests:
+#     description: Update Kubernetes manifests with new image tag
+#     docker:
+#       - image: cimg/base:stable
+#     steps:
+#       - checkout
+#       - add_ssh_keys:
+#           fingerprints:
+#             - "SHA256:tuVaE4x16JWn8TkGzn7FBv9UaM8NlVyewF5BDunpxKc"
+#       - attach_workspace:
+#           at: .
+#       - run:
+#           name: Update deployment image
+#           command: |
+#             sed -i "s|image: .*|image: rohit213/project-app:$CIRCLE_SHA1|g" k8s/deployment.yaml
+#       - run:
+#           name: Commit and push changes
+#           command: |
+#             git config user.email "circleci@todoapp.com"
+#             git config user.name "CircleCI Bot"
+#             git add k8s/deployment.yaml
+#             git commit -m "Update image tag to $CIRCLE_SHA1 [skip ci]" || true
+#             git push origin $CIRCLE_BRANCH
+#       - persist_to_workspace:
+#           root: .
+#           paths:
+#             - k8s
+
+#   deploy_argocd:
+#     description: Deploy or sync ArgoCD application
+#     docker:
+#       - image: cimg/python:3.11
+#     steps:
+#       - checkout
+#       - attach_workspace:
+#           at: .
+#       # --- ADDING STEPS TO FIX THE UNZIP ERROR ---
+#       - run:
+#           name: Install System Utilities (unzip)
+#           command: |
+#             sudo apt-get update && sudo apt-get install -y unzip
+#       # --------------------------------------------
+#       - aws-cli/setup
+#       - run:
+#           name: Install kubectl
+#           command: |
+#             curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+#             chmod +x kubectl
+#             sudo mv kubectl /usr/local/bin/
+#       - run:
+#           name: Install ArgoCD CLI
+#           command: |
+#             curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+#             chmod +x /tmp/argocd
+#             sudo mv /tmp/argocd /usr/local/bin/
+#       - run:
+#           name: Configure kubectl
+#           command: |
+#             aws eks update-kubeconfig --region $AWS_REGION --name todo-app-eks
+#       # =========================================================================
+#       # 🚀 EXTRA STEP: DEPLOY SECURE OBSERVABILITY SECRETS & APP-PROJECT
+#       # =========================================================================
+#       - run:
+#           name: Pre-stage Monitoring Dependencies & Secrets
+#           command: |
+#             # 1. Pre-create monitoring namespace
+#             kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+#             # 2. Inject secrets securely using your template (checking for folder case sensitivity)
+#             if [ -d "Monitoring" ]; then
+#               sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
+#                   -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
+#                   Monitoring/monitoring-secrets.tmpl.yaml > monitoring-secrets.yaml
+#             else
+#               sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
+#                   -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
+#                   monitoring/monitoring-secrets.tmpl.yaml > monitoring-secrets.yaml
+#             fi
+            
+#             kubectl apply -f monitoring-secrets.yaml
+#             rm monitoring-secrets.yaml
+
+#             # 3. Apply the AppProject FIRST so ArgoCD recognizes the 'monitoring' project environment
+#             kubectl apply -f argocd/project1.yaml
+
+#       # =========================================================================
+#       # 🛠️ APPLY ALL ARGOCD APPLICATION MANIFESTS
+#       # =========================================================================
+#       - run:
+#           name: Create ArgoCD Applications
+#           command: |
+#             # 4. Deploy Core App
+#             kubectl apply -f argocd/application.yaml
+            
+#             # 5. Deploy Prometheus CRDs Application First (Prevents sync timeout loops)
+#             kubectl apply -f argocd/crd.yaml
+            
+#             # 6. Deploy Wrapper Prometheus Stack Application
+#             kubectl apply -f argocd/monitoring-application.yaml
+
+#             # =========================================================================
+#             # ⏳ WAIT GATE: Give ArgoCD time to inject CustomResourceDefinitions
+#             # =========================================================================
+#             echo "Waiting for ArgoCD to register Prometheus CRDs in the EKS cluster..."
+#             for i in {1..20}; do
+#               if kubectl get crd prometheusrules.monitoring.coreos.com >/dev/null 2>&1; then
+#                 echo "Prometheus CRDs successfully registered by ArgoCD!"
+#                 break
+#               fi
+#               echo "CRDs aren't live yet. Retrying in 5 seconds ($i/20)..."
+#               sleep 5
+#             done
+#             # 7. Apply Custom Prometheus Alert Rules
+#             if [ -f "Monitoring/prometheus-alerts.yaml" ]; then
+#               kubectl apply -f Monitoring/prometheus-alerts.yaml
+#             else
+#               kubectl apply -f monitoring/prometheus-alerts.yaml
+#             fi
+      
+#       - run:
+#           name: Login to ArgoCD
+#           command: |
+#             argocd login $ARGOCD_SERVER \
+#             --username admin \
+#             --password $ARGOCD_PASSWORD \
+#             --insecure \
+#             --grpc-web
+      
+#       # =========================================================================
+#       # 🔄 SYNC AND VALIDATE ALL TRACKED APPLICATION CARDS
+#       # =========================================================================
+#       # - run:
+#       #     name: Create ArgoCD Application
+#       #     command: |
+#       #       kubectl apply -f argocd/application.yaml
+#       # - run:
+#       #     name: Login to ArgoCD
+#       #     command: |
+#       #       argocd login $ARGOCD_SERVER \
+#       #       --username admin \
+#       #       --password $ARGOCD_PASSWORD \
+#       #       --insecure \
+#       #       --grpc-web
+#       # - run:
+#       #     name: Sync ArgoCD Application
+#       #     command: |
+#       #       echo "Starting ArgoCD sync..."
+#       #       argocd app sync todo-app --grpc-web || true
+
+#       #       echo "Waiting for application to sync..."
+
+#       #       argocd app wait todo-app --grpc-web --timeout 180
+#       - run:
+#           name: Sync ArgoCD Application and Monitoring Stack
+#           command: |
+#             echo "Starting ArgoCD sync..."
+#             # 1. Sync the core todo application
+#             argocd app sync todo-app --grpc-web || true
+            
+#             # 2. Sync the custom resource definitions first (Crucial step)
+#             argocd app sync prometheus-crds --grpc-web || true
+            
+#             # 3. Sync the main monitoring helm stack chart  (added --async gemini)
+#             argocd app sync kube-prometheus-stack --grpc-web --async || true
+
+#             echo "Waiting for applications to stabilize..."
+#             argocd app wait todo-app --grpc-web --timeout 180
+#             argocd app wait kube-prometheus-stack --grpc-web --timeout 600
+#       - run:
+#           name: Wait for deployment
+#           command: |
+#             kubectl rollout status deployment/todo-app-deployment -n todo-app --timeout=5m
+
+# workflows:
+#   version: 2
+  
+#   build_and_push:
+#     jobs:
+#       - build:
+#           filters:
+#             branches:
+#               only: main
+#       - push_image:
+#           requires:
+#             - build
+#           filters:
+#             branches:
+#               only: main
+#       - update_k8s_manifests:
+#           requires:
+#             - push_image
+#           filters:
+#             branches:
+#               only: main
+#       - hold_deploy:
+#           type: approval
+#           requires:
+#             - update_k8s_manifests
+#           filters:
+#             branches:
+#               only: main
+#       - deploy_argocd:
+#           requires:
+#             - hold_deploy
+#           filters:
+#             branches:
+#               only: main
+
+#   infrastructure:
+#     jobs:
+#       - deploy_infrastructure:
+#           filters:
+#             branches:
+#               only: infrastructure
+#       - hold_apply:
+#           type: approval
+#           requires:
+#             - deploy_infrastructure
+#           filters:
+#             branches:
+#               only: infrastructure
+#       - apply_infrastructure:
+#           requires:
+#             - hold_apply
+#           filters:
+#             branches:
+#               only: infrastructure
