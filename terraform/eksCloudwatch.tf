@@ -1,7 +1,7 @@
 resource "aws_eks_cluster" "main" {
-  name            = var.cluster_name
-  version         = var.cluster_version
-  role_arn        = aws_iam_role.eks_cluster_role.arn
+  name                      = var.cluster_name
+  version                   = var.cluster_version
+  role_arn                  = aws_iam_role.eks_cluster_role.arn
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
   vpc_config {
@@ -19,11 +19,6 @@ resource "aws_eks_cluster" "main" {
   tags = {
     Name = var.cluster_name
   }
-}
-
-resource "aws_iam_role_policy_attachment" "eks_ebs_csi_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"       //added by gemini
-  role       = aws_iam_role.eks_node_role.name
 }
 
 resource "aws_eks_node_group" "main" {
@@ -55,17 +50,15 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.eks_container_registry_policy,
     aws_iam_role_policy_attachment.eks_ssm_policy,
     aws_iam_role_policy.node_dynamodb_s3_policy,
-    aws_iam_role_policy_attachment.eks_cloudwatch_agent_policy, //added for CloudWatch Agent permissions (gemini)
-    aws_iam_role_policy_attachment.eks_ebs_csi_policy                 //added for EBS CSI Driver permissions (gemini)
+    aws_iam_role_policy_attachment.eks_cloudwatch_agent_policy
   ]
 }
-#gemini 06-jun-26 
-# Attach CloudWatch Agent Policy to Node Role so it can ship container metrics
+
 resource "aws_iam_role_policy_attachment" "eks_cloudwatch_agent_policy" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
   role       = aws_iam_role.eks_node_role.name
 }
-# CloudWatch Log Group for EKS Cluster Logs
+
 resource "aws_cloudwatch_log_group" "eks" {
   name              = "/aws/eks/${var.cluster_name}/cluster"
   retention_in_days = 7
@@ -74,49 +67,62 @@ resource "aws_cloudwatch_log_group" "eks" {
     Name = "${var.project_name}-eks-logs"
   }
 }
-#suggested code by gemini to create the gp2 StorageClass mapped to the AWS EBS CSI Driver, which is required for dynamic provisioning of EBS volumes in EKS clusters. This allows Kubernetes to automatically create and manage EBS volumes for persistent storage when using the gp2 StorageClass.
-# Create the gp2 StorageClass mapped to the AWS EBS CSI Driver
-resource "kubernetes_storage_class_v1" "gp2" {
-  metadata {
-    name = "gp2"
-  }
 
-  storage_provisioner = "ebs.csi.aws.com"
-  volume_binding_mode = "WaitForFirstConsumer"
-  reclaim_policy      = "Delete"
+# Dedicated IRSA role for EBS CSI Driver
+resource "aws_iam_role" "ebs_csi_role" {
+  name_prefix = "${var.project_name}-ebs-csi-"
 
-  parameters = {
-    type = "gp3" # Upgrades your underlying disk to fast, cost-efficient GP3 volumes automatically
-  }
-
-  depends_on = [
-    aws_eks_node_group.main
-  ]
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      }
+      Condition = {
+        StringEquals = {
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+        }
+      }
+    }]
+  })
 }
 
-# Deploy the native AWS EBS CSI Driver Add-on
+resource "aws_iam_role_policy_attachment" "ebs_csi_role_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.ebs_csi_role.name
+}
+
 resource "aws_eks_addon" "ebs_csi" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "aws-ebs-csi-driver"
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "aws-ebs-csi-driver"
+  service_account_role_arn = aws_iam_role.ebs_csi_role.arn
 
-  # Adds the necessary permissions link so the add-on doesn't time out
-  service_account_role_arn = aws_iam_role.eks_node_role.arn
-  
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.ebs_csi_role_policy
+  ]
+}
+
+resource "aws_eks_addon" "cloudwatch_insights" {
+  cluster_name = aws_eks_cluster.main.name
+  addon_name   = "amazon-cloudwatch-observability"
+
   depends_on = [
     aws_eks_node_group.main
   ]
 }
-#code end of gemini suggestions for EBS CSI Driver and StorageClass
 
+# gp2 StorageClass applied via kubectl in pipeline after cluster is ready
+# See apply_infrastructure job in .circleci/config.yml
+# kubectl apply -f terraform/gp2-storageclass.yaml
 
-
-#gemini 06-jun-26
 resource "aws_cloudwatch_dashboard" "eks_dashboard" {
   dashboard_name = "${var.project_name}-eks-insights"
 
   dashboard_body = jsonencode({
     widgets = [
-      # Widget 1: EKS Cluster Node Count
       {
         type   = "metric"
         x      = 0
@@ -124,9 +130,7 @@ resource "aws_cloudwatch_dashboard" "eks_dashboard" {
         width  = 12
         height = 6
         properties = {
-          metrics = [
-            [ "AWS/ContainerInsights", "node_count", "ClusterName", var.cluster_name ]
-          ]
+          metrics = [["AWS/ContainerInsights", "node_count", "ClusterName", var.cluster_name]]
           period  = 60
           stat    = "Average"
           region  = "ap-south-1"
@@ -134,7 +138,6 @@ resource "aws_cloudwatch_dashboard" "eks_dashboard" {
           view    = "singleValue"
         }
       },
-      # Widget 2: Cluster CPU & Memory Utilization
       {
         type   = "metric"
         x      = 12
@@ -143,8 +146,8 @@ resource "aws_cloudwatch_dashboard" "eks_dashboard" {
         height = 6
         properties = {
           metrics = [
-            [ "AWS/ContainerInsights", "node_cpu_utilization", "ClusterName", var.cluster_name ],
-            [ ".", "node_memory_utilization", ".", "." ]
+            ["AWS/ContainerInsights", "node_cpu_utilization", "ClusterName", var.cluster_name],
+            [".", "node_memory_utilization", ".", "."]
           ]
           period  = 60
           stat    = "Average"
@@ -154,7 +157,6 @@ resource "aws_cloudwatch_dashboard" "eks_dashboard" {
           stacked = false
         }
       },
-      # Widget 3: Individual Pod Failed Phases (Triggers alongside your Prometheus metrics)
       {
         type   = "metric"
         x      = 0
@@ -162,9 +164,7 @@ resource "aws_cloudwatch_dashboard" "eks_dashboard" {
         width  = 24
         height = 6
         properties = {
-          metrics = [
-            [ "AWS/ContainerInsights", "pod_number_of_container_restarts", "ClusterName", var.cluster_name ]
-          ]
+          metrics = [["AWS/ContainerInsights", "pod_number_of_container_restarts", "ClusterName", var.cluster_name]]
           period  = 60
           stat    = "Sum"
           region  = "ap-south-1"
@@ -174,14 +174,4 @@ resource "aws_cloudwatch_dashboard" "eks_dashboard" {
       }
     ]
   })
-}
-
-# Deploys CloudWatch Container Insights to collect cluster metrics automatically
-resource "aws_eks_addon" "cloudwatch_insights" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "amazon-cloudwatch-observability"
-
-  depends_on = [
-    aws_eks_node_group.main
-  ]
 }

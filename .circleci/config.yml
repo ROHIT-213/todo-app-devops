@@ -86,11 +86,22 @@ jobs:
               sudo rm -rf /tmp/terraform_bin /tmp/terraform.zip
             fi
       - run:
+          name: Install kubectl
+          command: |
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+      - run:
           name: Terraform Apply
           command: |
             cd terraform
             terraform init -upgrade
             terraform apply -auto-approve tfplan
+      - run:
+          name: Apply gp2 StorageClass
+          command: |
+            aws eks update-kubeconfig --region $AWS_REGION --name todo-app-eks
+            # --dry-run=client first to verify, then apply (--force replaces if already exists)
+            kubectl apply -f terraform/gp2-storageclass.yaml --force
       - run:
           name: Export Outputs
           command: |
