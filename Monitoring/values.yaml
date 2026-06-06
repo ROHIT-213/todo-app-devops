@@ -84,6 +84,8 @@ alertmanager:
                 name: monitoring-credentials
                 key: slack-webhook-url
               send_resolved: true
+# Tells the Helm template builder to force parse the root config block into the Alertmanager spec
+tplConfig: true
 
 crds:
   enabled: true
