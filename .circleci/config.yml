@@ -61,11 +61,18 @@ jobs:
             terraform validate
             # Remove gp2 from state if present — managed via kubectl, not Terraform
             terraform state rm kubernetes_storage_class_v1.gp2 2>/dev/null || true
-            # Clear stale DynamoDB lock from any previously failed pipeline run
-            aws dynamodb delete-item \
-              --table-name terraform-locks \
-              --key '{"LockID": {"S": "todo-app-terraform-state-2809/eks/terraform.tfstate"}}' \
-              --region ap-south-1 2>/dev/null || true
+            # Sync DynamoDB digest with actual S3 state file MD5 to fix stale digest errors
+            ETAG=$(aws s3api head-object \
+              --bucket todo-app-terraform-state-2809 \
+              --key eks/terraform.tfstate \
+              --region ap-south-1 \
+              --query ETag --output text 2>/dev/null | tr -d '"' || echo '')
+            if [ -n "$ETAG" ]; then
+              aws dynamodb put-item \
+                --table-name terraform-locks \
+                --item "{\"LockID\": {\"S\": \"todo-app-terraform-state-2809/eks/terraform.tfstate-md5\"}, \"Digest\": {\"S\": \"$ETAG\"}}" \
+                --region ap-south-1 2>/dev/null || true
+            fi
             terraform plan -var="aws_region=$AWS_REGION" -var="cluster_name=todo-app-eks" -var-file="terraform.tfvars" -out=tfplan
 
       - persist_to_workspace:
