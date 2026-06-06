@@ -198,6 +198,18 @@ jobs:
             rm monitoring-secrets.yaml
 
             kubectl apply -f argocd/project1.yaml
+      # =========================================================================
+      # ADD YOUR NEW INJECTION STEP HERE (BEFORE ARGOCD APPLICATION MANIFESTS)
+      # =========================================================================
+      - run:
+          name: Securely Inject Slack Webhook into Values Configuration
+          command: |
+            if [ -f "Monitoring/values.yaml" ]; then
+              sed -i "s|SLACK_WEBHOOK_URL_PLACEHOLDER|$SLACK_WEBHOOK_URL|g" Monitoring/values.yaml
+            else
+              sed -i "s|SLACK_WEBHOOK_URL_PLACEHOLDER|$SLACK_WEBHOOK_URL|g" monitoring/values.yaml
+            fi
+
       - run:
           name: Create ArgoCD Applications
           command: |
