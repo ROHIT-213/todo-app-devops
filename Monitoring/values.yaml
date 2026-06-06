@@ -73,20 +73,19 @@ alertmanager:
       group_by: ['alertname', 'cluster', 'service']
       group_wait: 30s
       group_interval: 5m
-      # repeat_interval: 12h
+      repeat_interval: 12h
       receiver: 'slack-notifications'
+      routes:
+        - matchers:
+            - alertname = "Watchdog"
+          receiver: 'null'
     receivers:
       - name: 'null'
       - name: 'slack-notifications'
         slack_configs:
           - channel: '#alerts-devops'
             send_resolved: true
-              # Safely pulls the secret value directly out of your credentials secret object
-            api_url_secret:
-              name: monitoring-credentials
-              key: slack-webhook-url
-# Tells the Helm template builder to force parse the root config block into the Alertmanager spec
-tplConfig: true
+            api_url: 'SLACK_WEBHOOK_URL_PLACEHOLDER'
 
 crds:
   enabled: true
