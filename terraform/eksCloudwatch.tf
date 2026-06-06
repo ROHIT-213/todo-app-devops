@@ -101,6 +101,9 @@ resource "aws_eks_addon" "ebs_csi" {
   # addon_version            = "v1.30.0-eksbuild.1" # Explicitly locks the stable storage runtime engine
   service_account_role_arn = aws_iam_role.ebs_csi_role.arn
 
+  # FIX: Forces AWS to overwrite and clear out the hanging/timed-out previous deployment states
+  resolve_conflicts_on_update = "OVERWRITE"
+  
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_role_policy
