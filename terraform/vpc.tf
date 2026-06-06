@@ -190,3 +190,31 @@ resource "aws_vpc_security_group_egress_rule" "eks_nodes_all" {
   cidr_ipv4         = "0.0.0.0/0"
   description       = "Allow all outbound traffic"
 }
+
+# ====================================================================
+# PASTE THE NEW RULES DIRECTLY HERE:
+# ====================================================================
+
+# 1. Allow the EKS Control Plane (Master) to communicate with worker nodes on HTTPS (Port 443)
+# This is mandatory for provisioning Addons, Webhooks, and API extensions.
+resource "aws_vpc_security_group_ingress_rule" "eks_nodes_master_https" {
+  security_group_id = aws_security_group.eks_nodes.id
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+
+  referenced_security_group_id = aws_security_group.eks_master.id
+  description                  = "Allow EKS master to communicate with nodes via HTTPS"
+}
+
+# 2. Allow Master to communicate with Node Kubelets (Port 10250)
+# Required for kubectl logs, exec, and state configurations
+resource "aws_vpc_security_group_ingress_rule" "eks_nodes_kubelet" {
+  security_group_id = aws_security_group.eks_nodes.id
+  from_port         = 10250
+  to_port           = 10250
+  ip_protocol       = "tcp"
+
+  referenced_security_group_id = aws_security_group.eks_master.id
+  description                  = "Allow EKS master to communicate with Node Kubelet API"
+}
