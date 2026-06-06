@@ -21,11 +21,6 @@ resource "aws_eks_cluster" "main" {
   }
 }
 
-resource "aws_iam_role_policy_attachment" "eks_ebs_csi_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"       //added by gemini
-  role       = aws_iam_role.eks_node_role.name
-}
-
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.project_name}-node-group"
@@ -55,8 +50,7 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.eks_container_registry_policy,
     aws_iam_role_policy_attachment.eks_ssm_policy,
     aws_iam_role_policy.node_dynamodb_s3_policy,
-    aws_iam_role_policy_attachment.eks_cloudwatch_agent_policy, //added for CloudWatch Agent permissions (gemini)
-    aws_iam_role_policy_attachment.eks_ebs_csi_policy                 //added for EBS CSI Driver permissions (gemini)
+    aws_iam_role_policy_attachment.eks_cloudwatch_agent_policy //added for CloudWatch Agent permissions (gemini)
   ]
 }
 #gemini 06-jun-26 
@@ -74,11 +68,19 @@ resource "aws_cloudwatch_log_group" "eks" {
     Name = "${var.project_name}-eks-logs"
   }
 }
-#suggested code by gemini to create the gp2 StorageClass mapped to the AWS EBS CSI Driver, which is required for dynamic provisioning of EBS volumes in EKS clusters. This allows Kubernetes to automatically create and manage EBS volumes for persistent storage when using the gp2 StorageClass.
-# Create the gp2 StorageClass mapped to the AWS EBS CSI Driver
+# EKS auto-creates gp2 on cluster creation — this import block permanently handles that
+# so every fresh destroy+apply works without manual intervention
+import {
+  to = kubernetes_storage_class_v1.gp2
+  id = "gp2"
+}
+
 resource "kubernetes_storage_class_v1" "gp2" {
   metadata {
     name = "gp2"
+    annotations = {
+      "storageclass.kubernetes.io/is-default-class" = "true"
+    }
   }
 
   storage_provisioner = "ebs.csi.aws.com"
@@ -86,7 +88,7 @@ resource "kubernetes_storage_class_v1" "gp2" {
   reclaim_policy      = "Delete"
 
   parameters = {
-    type = "gp3" # Upgrades your underlying disk to fast, cost-efficient GP3 volumes automatically
+    type = "gp3"
   }
 
   depends_on = [
@@ -94,13 +96,41 @@ resource "kubernetes_storage_class_v1" "gp2" {
   ]
 }
 
+# Dedicated IRSA role for EBS CSI Driver (required — node role causes addon timeout)
+resource "aws_iam_role" "ebs_csi_role" {
+  name_prefix = "${var.project_name}-ebs-csi-"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      }
+      Condition = {
+        StringEquals = {
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi_role_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.ebs_csi_role.name
+}
+
 # Deploy the native AWS EBS CSI Driver Add-on
 resource "aws_eks_addon" "ebs_csi" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "aws-ebs-csi-driver"
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "aws-ebs-csi-driver"
+  service_account_role_arn = aws_iam_role.ebs_csi_role.arn
 
   depends_on = [
-    aws_eks_node_group.main
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.ebs_csi_role_policy
   ]
 }
 #code end of gemini suggestions for EBS CSI Driver and StorageClass
