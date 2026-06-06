@@ -206,15 +206,6 @@ jobs:
       # ADD YOUR NEW INJECTION STEP HERE (BEFORE ARGOCD APPLICATION MANIFESTS)
       # =========================================================================
       - run:
-          name: Securely Inject Slack Webhook into Values Configuration
-          command: |
-            if [ -f "Monitoring/values.yaml" ]; then
-              sed -i "s|SLACK_WEBHOOK_URL_PLACEHOLDER|$SLACK_WEBHOOK_URL|g" Monitoring/values.yaml
-            else
-              sed -i "s|SLACK_WEBHOOK_URL_PLACEHOLDER|$SLACK_WEBHOOK_URL|g" monitoring/values.yaml
-            fi
-
-      - run:
           name: Create ArgoCD Applications
           command: |
             kubectl apply -f argocd/application.yaml
@@ -249,14 +240,33 @@ jobs:
           command: |
             echo "Starting ArgoCD sync..."
             argocd app sync todo-app --grpc-web || true
-            
-            # FIXED APPLICATION NAME MATCHES HERE:
             argocd app sync prometheus-operator-crds --grpc-web || true
             argocd app sync kube-prometheus-stack --grpc-web --async || true
 
             echo "Waiting for applications to stabilize..."
             argocd app wait todo-app --grpc-web --timeout 180
             argocd app wait kube-prometheus-stack --grpc-web --timeout 600
+      - run:
+          name: Inject Slack Webhook into Alertmanager Secret
+          command: |
+            # ArgoCD syncs values.yaml from git (with placeholder) then generates the secret
+            # We patch the live secret AFTER sync with the real webhook URL
+            kubectl get secret alertmanager-kube-prometheus-stack-alertmanager \
+              -n monitoring \
+              -o jsonpath='{.data.alertmanager\.yaml}' | base64 -d \
+              | sed "s|SLACK_WEBHOOK_URL_PLACEHOLDER|$SLACK_WEBHOOK_URL|g" \
+              > /tmp/alertmanager.yaml
+
+            kubectl create secret generic alertmanager-kube-prometheus-stack-alertmanager \
+              -n monitoring \
+              --from-file=alertmanager.yaml=/tmp/alertmanager.yaml \
+              --dry-run=client -o yaml | kubectl apply -f -
+
+            rm /tmp/alertmanager.yaml
+
+            # Restart alertmanager pod to pick up the new secret
+            kubectl delete pod alertmanager-kube-prometheus-stack-alertmanager-0 \
+              -n monitoring --ignore-not-found
       - run:
           name: Wait for deployment
           command: |
