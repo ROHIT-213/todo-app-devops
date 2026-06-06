@@ -88,6 +88,8 @@ jobs:
           command: |
             cd terraform
             terraform init -upgrade
+            # Import gp2 StorageClass if it exists in EKS but not yet in state
+            terraform import kubernetes_storage_class_v1.gp2 gp2 2>/dev/null || true
             terraform apply -auto-approve tfplan
       - run:
           name: Export Outputs

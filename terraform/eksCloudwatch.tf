@@ -68,13 +68,7 @@ resource "aws_cloudwatch_log_group" "eks" {
     Name = "${var.project_name}-eks-logs"
   }
 }
-# EKS auto-creates gp2 on cluster creation — this import block permanently handles that
-# so every fresh destroy+apply works without manual intervention
-import {
-  to = kubernetes_storage_class_v1.gp2
-  id = "gp2"
-}
-
+# EKS auto-creates gp2 on cluster creation — imported into state via pipeline before apply
 resource "kubernetes_storage_class_v1" "gp2" {
   metadata {
     name = "gp2"
