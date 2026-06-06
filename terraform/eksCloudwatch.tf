@@ -50,16 +50,8 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.eks_container_registry_policy,
     aws_iam_role_policy_attachment.eks_ssm_policy,
     aws_iam_role_policy.node_dynamodb_s3_policy,
-    aws_iam_role_policy_attachment.eks_cloudwatch_agent_policy,
-    # Add this line:
-    aws_iam_role_policy_attachment.eks_node_ebs_policy
+    aws_iam_role_policy_attachment.eks_cloudwatch_agent_policy
   ]
-}
-
-# FIX: Explicitly attach the Amazon EBS CSI Driver policy to the Node Group Role
-resource "aws_iam_role_policy_attachment" "eks_node_ebs_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-  role       = aws_iam_role.eks_node_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cloudwatch_agent_policy" {
@@ -90,8 +82,7 @@ resource "aws_iam_role" "ebs_csi_role" {
       }
       Condition = {
         StringEquals = {
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-ebs-csi-driver-sa"
-          # "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
         }
       }
     }]

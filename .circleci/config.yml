@@ -59,6 +59,7 @@ jobs:
             cd terraform
             terraform init -upgrade
             terraform validate
+            terraform plan -lock=false -out=tfplan
             # Remove gp2 from state if present — managed via kubectl, not Terraform
             terraform state rm kubernetes_storage_class_v1.gp2 2>/dev/null || true
             # Sync DynamoDB digest with actual S3 state file MD5 to fix stale digest errors
@@ -73,6 +74,9 @@ jobs:
                 --item "{\"LockID\": {\"S\": \"todo-app-terraform-state-2809/eks/terraform.tfstate-md5\"}, \"Digest\": {\"S\": \"$ETAG\"}}" \
                 --region ap-south-1 2>/dev/null || true
             fi
+            # Remove orphaned SG rules from state if they exist
+            terraform state rm aws_vpc_security_group_ingress_rule.eks_nodes_master_https 2>/dev/null || true
+            terraform state rm aws_vpc_security_group_ingress_rule.eks_nodes_kubelet 2>/dev/null || true
             terraform plan -var="aws_region=$AWS_REGION" -var="cluster_name=todo-app-eks" -var-file="terraform.tfvars" -out=tfplan
 
       - persist_to_workspace:
