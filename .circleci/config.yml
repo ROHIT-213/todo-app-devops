@@ -59,6 +59,8 @@ jobs:
             cd terraform
             terraform init -upgrade
             terraform validate
+            # Remove gp2 from state if present — it's managed by EKS/addon, not Terraform
+            terraform state rm kubernetes_storage_class_v1.gp2 2>/dev/null || true
             terraform plan -var="aws_region=$AWS_REGION" -var="cluster_name=todo-app-eks" -var-file="terraform.tfvars" -out=tfplan
 
       - persist_to_workspace:
@@ -88,8 +90,6 @@ jobs:
           command: |
             cd terraform
             terraform init -upgrade
-            # Import gp2 StorageClass if it exists in EKS but not yet in state
-            terraform import kubernetes_storage_class_v1.gp2 gp2 2>/dev/null || true
             terraform apply -auto-approve tfplan
       - run:
           name: Export Outputs
