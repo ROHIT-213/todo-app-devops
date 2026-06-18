@@ -78,7 +78,16 @@ jobs:
             terraform state rm aws_vpc_security_group_ingress_rule.eks_nodes_master_https 2>/dev/null || true
             terraform state rm aws_vpc_security_group_ingress_rule.eks_nodes_kubelet 2>/dev/null || true
             terraform plan -var="aws_region=$AWS_REGION" -var="cluster_name=todo-app-eks" -var-file="terraform.tfvars" -out=tfplan
-
+      
+      # --- ADD THIS NEW STEP ---
+      - run:
+          name: Run Trivy IaC Security Scan
+          command: |
+            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+            trivy config ./terraform --severity HIGH,CRITICAL --exit-code 0
+            # Note: exit-code 0 ensures the pipeline doesn't fail just for the demo, 
+            # change to 1 in a real production environment to block deployment.
+      # -------------------------
       - persist_to_workspace:
           root: .
           paths:
