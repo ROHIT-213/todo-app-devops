@@ -83,10 +83,19 @@ jobs:
       - run:
           name: Run Trivy IaC Security Scan
           command: |
-            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-            trivy config ./terraform --severity HIGH,CRITICAL --exit-code 0
-            # Note: exit-code 0 ensures the pipeline doesn't fail just for the demo, 
-            # change to 1 in a real production environment to block deployment.
+            # Create a local directory that doesn't require root permissions
+            mkdir -p ./bin
+            
+            # Install trivy into the local ./bin directory instead of /usr/local/bin
+            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ./bin
+            
+            # Execute trivy from the local directory
+            ./bin/trivy config ./terraform --severity HIGH,CRITICAL --exit-code 0
+            
+            # curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+            # trivy config ./terraform --severity HIGH,CRITICAL --exit-code 0
+            # # Note: exit-code 0 ensures the pipeline doesn't fail just for the demo, 
+            # # change to 1 in a real production environment to block deployment.
       # -------------------------
       - persist_to_workspace:
           root: .
