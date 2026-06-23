@@ -6,18 +6,46 @@ orbs:
 
 jobs:
   build:
+    description: Build and test the application
     docker:
       - image: cimg/node:16.20
     steps:
       - checkout
-      - run: npm install
-      - run: npm test -- --watchAll=false --passWithNoTests
-      - run: npm run build
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "package.json" }}
+            - v1-dependencies-
+      - run:
+          name: Install dependencies
+          command: npm 
+      # --- ADD THIS NEW STEP to install snyk---
+      - run:
+          name: Run Snyk Software Composition Analysis (SCA)
+          command: |
+            npm install -g snyk
+            snyk auth $SNYK_TOKEN
+            snyk test --severity-threshold=high || true
+      # -------------------------
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+      - run:
+          name: Run tests
+          command: npm test -- --watchAll=false --passWithNoTests
+      - run:
+          name: Build application
+          command: npm run build
       - persist_to_workspace:
           root: .
-          paths: [build, package.json, Dockerfile, .dockerignore]
+          paths:
+            - build
+            - package.json
+            - Dockerfile
+            - .dockerignore
 
   push_image:
+    description: Build and push Docker image to registry
     machine:
       image: ubuntu-2204:current
     steps:
@@ -25,61 +53,61 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: Build and Push Docker image
+          name: verify Docker
+          command: docker --version
+      - run:
+          name: Build Docker image
           command: |
+            docker build -t rohit213/project-app:$CIRCLE_SHA1 .
+            docker tag rohit213/project-app:$CIRCLE_SHA1 rohit213/project-app:latest
+      # --- ADD THIS NEW STEP ---
+      - run:
+          name: Run Snyk Container Security Scan
+          command: |
+            curl --compressed https://static.snyk.io/cli/latest/snyk-linux -o snyk
+            chmod +x ./snyk
+            sudo mv ./snyk /usr/local/bin/
+            snyk auth $SNYK_TOKEN
+            snyk container test rohit213/project-app:$CIRCLE_SHA1 --file=Dockerfile --severity-threshold=high || true
+      # -------------------------
+      - run:
+          name: DockerHub Login 
+          command: | 
             echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin
-            docker build -t $DOCKERHUB_USERNAME/project-app:$CIRCLE_SHA1 .
-            docker tag $DOCKERHUB_USERNAME/project-app:$CIRCLE_SHA1 $DOCKERHUB_USERNAME/project-app:latest
-            docker push $DOCKERHUB_USERNAME/project-app:$CIRCLE_SHA1
-            docker push $DOCKERHUB_USERNAME/project-app:latest
+      - run:
+          name: Push Docker image 
+          command: | 
+            docker push rohit213/project-app:$CIRCLE_SHA1 
+            docker push rohit213/project-app:latest
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
 
   deploy_infrastructure:
+    description: Deploy AWS infrastructure using Terraform
     docker:
-      - image: cimg/base:stable 
+      - image: hashicorp/terraform:latest
     steps:
       - checkout
       - aws-cli/setup
       - run:
-          name: Install Terraform (Conflict-Free)
-          command: |
-            if ! command -v terraform &> /dev/null; then
-              # Download to a temporary file
-              sudo curl -Lo /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
-              # Unzip into a temporary directory to avoid the "Is a directory" error
-              sudo unzip -o /tmp/terraform.zip -d /tmp/terraform_bin
-              # Move the actual binary to your path
-              sudo mv /tmp/terraform_bin/terraform /usr/local/bin/
-              # Clean up
-              sudo rm -rf /tmp/terraform_bin /tmp/terraform.zip
-            fi
-            terraform --version
-      - run:
-          name: Terraform Plan
+          name: Initialize Terraform
           command: |
             cd terraform
             terraform init -upgrade
+      - run:
+          name: Validate Terraform
+          command: |
+            cd terraform
             terraform validate
-            terraform plan -lock=false -out=tfplan
-            # Remove gp2 from state if present — managed via kubectl, not Terraform
-            terraform state rm kubernetes_storage_class_v1.gp2 2>/dev/null || true
-            # Sync DynamoDB digest with actual S3 state file MD5 to fix stale digest errors
-            ETAG=$(aws s3api head-object \
-              --bucket todo-app-terraform-state-2809 \
-              --key eks/terraform.tfstate \
-              --region ap-south-1 \
-              --query ETag --output text 2>/dev/null | tr -d '"' || echo '')
-            if [ -n "$ETAG" ]; then
-              aws dynamodb put-item \
-                --table-name terraform-locks \
-                --item "{\"LockID\": {\"S\": \"todo-app-terraform-state-2809/eks/terraform.tfstate-md5\"}, \"Digest\": {\"S\": \"$ETAG\"}}" \
-                --region ap-south-1 2>/dev/null || true
-            fi
-            # Remove orphaned SG rules from state if they exist
-            terraform state rm aws_vpc_security_group_ingress_rule.eks_nodes_master_https 2>/dev/null || true
-            terraform state rm aws_vpc_security_group_ingress_rule.eks_nodes_kubelet 2>/dev/null || true
-            terraform plan -var="aws_region=$AWS_REGION" -var="cluster_name=todo-app-eks" -var-file="terraform.tfvars" -out=tfplan
-      
-      # --- ADD THIS NEW STEP ---
+      - run:
+          name: Plan Terraform
+          command: |
+            cd terraform
+            terraform plan -var-file="terraform.tfvars" -out=tfplan
+
+      # --- ADD THIS NEW STEP for trivy ---
       - run:
           name: Run Trivy IaC Security Scan
           command: |
@@ -94,41 +122,26 @@ jobs:
             - terraform/tfplan
 
   apply_infrastructure:
+    description: Apply Terraform changes to AWS
     docker:
-      - image: cimg/base:stable
+      - image: hashicorp/terraform:latest
     steps:
       - checkout
       - attach_workspace:
           at: .
       - aws-cli/setup
       - run:
-          name: Install Terraform (Conflict-Free)
-          command: |
-            if ! command -v terraform &> /dev/null; then
-              sudo curl -Lo /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
-              sudo unzip -o /tmp/terraform.zip -d /tmp/terraform_bin
-              sudo mv /tmp/terraform_bin/terraform /usr/local/bin/
-              sudo rm -rf /tmp/terraform_bin /tmp/terraform.zip
-            fi
-      - run:
-          name: Install kubectl
-          command: |
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-            chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-      - run:
-          name: Terraform Apply
+          name: Initialize Terraform
           command: |
             cd terraform
             terraform init -upgrade
+      - run:
+          name: Apply Terraform
+          command: |
+            cd terraform
             terraform apply -auto-approve tfplan
       - run:
-          name: Apply gp2 StorageClass
-          command: |
-            aws eks update-kubeconfig --region $AWS_REGION --name todo-app-eks
-            # --dry-run=client first to verify, then apply (--force replaces if already exists)
-            kubectl apply -f terraform/gp2-storageclass.yaml --force
-      - run:
-          name: Export Outputs
+          name: Export Terraform outputs
           command: |
             cd terraform
             terraform output -json > ../terraform_outputs.json
@@ -138,68 +151,424 @@ jobs:
             - terraform_outputs.json
 
   update_k8s_manifests:
+    description: Update Kubernetes manifests with new image tag
     docker:
       - image: cimg/base:stable
     steps:
       - checkout
       - add_ssh_keys:
-          fingerprints: ["SHA256:tuVaE4x16JWn8TkGzn7FBv9UaM8NlVyewF5BDunpxKc"]
+          fingerprints:
+            - "SHA256:tuVaE4x16JWn8TkGzn7FBv9UaM8NlVyewF5BDunpxKc"
+      - attach_workspace:
+          at: .
       - run:
-          name: Update Deployment Tag
+          name: Update deployment image
           command: |
-            sed -i "s|image: .*|image: $DOCKERHUB_USERNAME/project-app:$CIRCLE_SHA1|g" k8s/deployment.yaml
-            git config user.email "circleci@bot.com"
+            sed -i "s|image: .*|image: rohit213/project-app:$CIRCLE_SHA1|g" k8s/deployment.yaml
+      - run:
+          name: Commit and push changes
+          command: |
+            git config user.email "circleci@todoapp.com"
             git config user.name "CircleCI Bot"
             git add k8s/deployment.yaml
             git commit -m "Update image tag to $CIRCLE_SHA1 [skip ci]" || true
             git push origin $CIRCLE_BRANCH
+      - persist_to_workspace:
+          root: .
+          paths:
+            - k8s
 
   deploy_argocd:
+    description: Deploy or sync ArgoCD application
     docker:
       - image: cimg/python:3.11
     steps:
       - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install System Utilities (unzip)
+          command: |
+            sudo apt-get update && sudo apt-get install -y unzip
       - aws-cli/setup
       - run:
-          name: Install kubectl & ArgoCD CLI
+          name: Install kubectl
           command: |
             curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-            chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-            curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-            chmod +x /tmp/argocd && sudo mv /tmp/argocd /usr/local/bin/
+            chmod +x kubectl
+            sudo mv kubectl /usr/local/bin/
       - run:
-          name: Sync ArgoCD
+          name: Install ArgoCD CLI
+          command: |
+            ARGOCD_VERSION="v2.12.0"
+            curl -sSL --retry 5 --retry-delay 3 \
+              -o /tmp/argocd \
+              https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64
+            chmod +x /tmp/argocd
+            sudo mv /tmp/argocd /usr/local/bin/
+            argocd version --client
+      - run:
+          name: Configure kubectl
           command: |
             aws eks update-kubeconfig --region $AWS_REGION --name todo-app-eks
-            argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PASSWORD --insecure --grpc-web
-            argocd app sync todo-app --grpc-web
+      # --- ADD THIS NEW STEP ---
+      - run:
+          name: Install Kubernetes Metrics Server (Required for HPA)
+          command: |
+            kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+            echo "Waiting for Metrics Server to initialize..."
+            kubectl rollout status deployment metrics-server -n kube-system --timeout=90s
+      # -------------------------
+      - run:
+          name: Pre-stage Monitoring Dependencies & Secrets
+          command: |
+            kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+            if [ -d "Monitoring" ]; then
+              sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
+                  -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
+                  Monitoring/monitoring-secrets.tmpl.yaml > monitoring-secrets.yaml
+            else
+              sed -e "s|\${GRAFANA_ADMIN_PASSWORD}|$GRAFANA_ADMIN_PASSWORD|g" \
+                  -e "s|\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g" \
+                  monitoring/monitoring-secrets.tmpl.yaml > monitoring-secrets.yaml
+            fi
+            
+            kubectl apply -f monitoring-secrets.yaml
+            rm monitoring-secrets.yaml
+
+            kubectl apply -f argocd/project1.yaml
+      # =========================================================================
+      # ADD YOUR NEW INJECTION STEP HERE (BEFORE ARGOCD APPLICATION MANIFESTS)
+      # =========================================================================
+      - run:
+          name: Create ArgoCD Applications
+          command: |
+            kubectl apply -f argocd/application.yaml
+            kubectl apply -f argocd/crd.yaml
+            kubectl apply -f argocd/monitoring-application.yaml
+            kubectl apply -f argocd/metrics-server.yaml
+            
+            echo "Waiting for ArgoCD to register Prometheus CRDs in the EKS cluster..."
+            for i in {1..20}; do
+              if kubectl get crd prometheusrules.monitoring.coreos.com >/dev/null 2>&1; then
+                echo "Prometheus CRDs successfully registered by ArgoCD!"
+                break
+              fi
+              echo "CRDs aren't live yet. Retrying in 5 seconds ($i/20)..."
+              sleep 5
+            done
+
+            if [ -f "Monitoring/prometheus-alerts.yaml" ]; then
+              kubectl apply -f Monitoring/prometheus-alerts.yaml
+            else
+              kubectl apply -f monitoring/prometheus-alerts.yaml
+            fi
+      - run:
+          name: Login to ArgoCD
+          command: |
+            argocd login $ARGOCD_SERVER \
+            --username admin \
+            --password $ARGOCD_PASSWORD \
+            --insecure \
+            --grpc-web
+      - run:
+          name: Sync ArgoCD Application and Monitoring Stack
+          command: |
+            echo "Starting ArgoCD sync..."
+            argocd app sync todo-app --grpc-web || true
+            argocd app sync prometheus-operator-crds --grpc-web || true
+            argocd app sync kube-prometheus-stack --grpc-web --async || true
+
+            echo "Waiting for applications to stabilize..."
+            argocd app wait todo-app --grpc-web --timeout 180
+            argocd app wait kube-prometheus-stack --grpc-web --timeout 600
+      - run:
+          name: Inject Slack Webhook into Alertmanager Secret
+          command: |
+            # ArgoCD syncs values.yaml from git (with placeholder) then generates the secret
+            # We patch the live secret AFTER sync with the real webhook URL
+            kubectl get secret alertmanager-kube-prometheus-stack-alertmanager \
+              -n monitoring \
+              -o jsonpath='{.data.alertmanager\.yaml}' | base64 -d \
+              | sed "s|SLACK_WEBHOOK_URL_PLACEHOLDER|$SLACK_WEBHOOK_URL|g" \
+              > /tmp/alertmanager.yaml
+
+            kubectl create secret generic alertmanager-kube-prometheus-stack-alertmanager \
+              -n monitoring \
+              --from-file=alertmanager.yaml=/tmp/alertmanager.yaml \
+              --dry-run=client -o yaml | kubectl apply -f -
+
+            rm /tmp/alertmanager.yaml
+
+            # Restart alertmanager pod to pick up the new secret
+            kubectl delete pod alertmanager-kube-prometheus-stack-alertmanager-0 \
+              -n monitoring --ignore-not-found
+      - run:
+          name: Wait for deployment
+          command: |
+            kubectl rollout status deployment/todo-app-deployment -n todo-app --timeout=5m
 
 workflows:
-  infrastructure_workflow:
-    jobs:
-      - deploy_infrastructure:   
-          filters: { branches: { only: infrastructure } }
-      - hold_apply:
-          type: approval
-          requires: [deploy_infrastructure]
-          filters: { branches: { only: infrastructure } }
-      - apply_infrastructure:
-          requires: [hold_apply]
-          filters: { branches: { only: infrastructure } }
-
-  app_workflow:
+  version: 2
+  build_and_push:
     jobs:
       - build:
-          filters: { branches: { only: main } }
+          filters:
+            branches:
+              only: main
       - push_image:
-          requires: [build]
+          requires:
+            - build
+          filters:
+            branches:
+              only: main
       - update_k8s_manifests:
-          requires: [push_image]
+          requires:
+            - push_image
+          filters:
+            branches:
+              only: main
       - hold_deploy:
           type: approval
-          requires: [update_k8s_manifests]
+          requires:
+            - update_k8s_manifests
+          filters:
+            branches:
+              only: main
       - deploy_argocd:
-          requires: [hold_deploy]
+          requires:
+            - hold_deploy
+          filters:
+            branches:
+              only: main
+
+  infrastructure:
+    jobs:
+      - deploy_infrastructure:
+          filters:
+            branches:
+              only: infrastructure
+      - hold_apply:
+          type: approval
+          requires:
+            - deploy_infrastructure
+          filters:
+            branches:
+              only: infrastructure
+      - apply_infrastructure:
+          requires:
+            - hold_apply
+          filters:
+            branches:
+              only: infrastructure
+
+
+
+
+
+# version: 2.1
+
+# orbs:
+#   aws-cli: circleci/aws-cli@3.1.3
+#   docker: circleci/docker@2.2.0
+
+# jobs:
+#   build:
+#     docker:
+#       - image: cimg/node:16.20
+#     steps:
+#       - checkout
+#       - run: npm install
+#       - run: npm test -- --watchAll=false --passWithNoTests
+#       - run: npm run build
+#       - persist_to_workspace:
+#           root: .
+#           paths: [build, package.json, Dockerfile, .dockerignore]
+
+#   push_image:
+#     machine:
+#       image: ubuntu-2204:current
+#     steps:
+#       - checkout
+#       - attach_workspace:
+#           at: .
+#       - run:
+#           name: Build and Push Docker image
+#           command: |
+#             echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin
+#             docker build -t $DOCKERHUB_USERNAME/project-app:$CIRCLE_SHA1 .
+#             docker tag $DOCKERHUB_USERNAME/project-app:$CIRCLE_SHA1 $DOCKERHUB_USERNAME/project-app:latest
+#             docker push $DOCKERHUB_USERNAME/project-app:$CIRCLE_SHA1
+#             docker push $DOCKERHUB_USERNAME/project-app:latest
+
+#   deploy_infrastructure:
+#     docker:
+#       - image: cimg/base:stable 
+#     steps:
+#       - checkout
+#       - aws-cli/setup
+#       - run:
+#           name: Install Terraform (Conflict-Free)
+#           command: |
+#             if ! command -v terraform &> /dev/null; then
+#               # Download to a temporary file
+#               sudo curl -Lo /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+#               # Unzip into a temporary directory to avoid the "Is a directory" error
+#               sudo unzip -o /tmp/terraform.zip -d /tmp/terraform_bin
+#               # Move the actual binary to your path
+#               sudo mv /tmp/terraform_bin/terraform /usr/local/bin/
+#               # Clean up
+#               sudo rm -rf /tmp/terraform_bin /tmp/terraform.zip
+#             fi
+#             terraform --version
+#       - run:
+#           name: Terraform Plan
+#           command: |
+#             cd terraform
+#             terraform init -upgrade
+#             terraform validate
+#             terraform plan -lock=false -out=tfplan
+#             # Remove gp2 from state if present — managed via kubectl, not Terraform
+#             terraform state rm kubernetes_storage_class_v1.gp2 2>/dev/null || true
+#             # Sync DynamoDB digest with actual S3 state file MD5 to fix stale digest errors
+#             ETAG=$(aws s3api head-object \
+#               --bucket todo-app-terraform-state-2809 \
+#               --key eks/terraform.tfstate \
+#               --region ap-south-1 \
+#               --query ETag --output text 2>/dev/null | tr -d '"' || echo '')
+#             if [ -n "$ETAG" ]; then
+#               aws dynamodb put-item \
+#                 --table-name terraform-locks \
+#                 --item "{\"LockID\": {\"S\": \"todo-app-terraform-state-2809/eks/terraform.tfstate-md5\"}, \"Digest\": {\"S\": \"$ETAG\"}}" \
+#                 --region ap-south-1 2>/dev/null || true
+#             fi
+#             # Remove orphaned SG rules from state if they exist
+#             terraform state rm aws_vpc_security_group_ingress_rule.eks_nodes_master_https 2>/dev/null || true
+#             terraform state rm aws_vpc_security_group_ingress_rule.eks_nodes_kubelet 2>/dev/null || true
+#             terraform plan -var="aws_region=$AWS_REGION" -var="cluster_name=todo-app-eks" -var-file="terraform.tfvars" -out=tfplan
+      
+#       # --- ADD THIS NEW STEP ---
+#       - run:
+#           name: Run Trivy IaC Security Scan
+#           command: |
+#             curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+#             trivy config ./terraform --severity HIGH,CRITICAL --exit-code 0
+#             # Note: exit-code 0 ensures the pipeline doesn't fail just for the demo, 
+#             # change to 1 in a real production environment to block deployment.
+#       # -------------------------
+#       - persist_to_workspace:
+#           root: .
+#           paths:
+#             - terraform/tfplan
+
+#   apply_infrastructure:
+#     docker:
+#       - image: cimg/base:stable
+#     steps:
+#       - checkout
+#       - attach_workspace:
+#           at: .
+#       - aws-cli/setup
+#       - run:
+#           name: Install Terraform (Conflict-Free)
+#           command: |
+#             if ! command -v terraform &> /dev/null; then
+#               sudo curl -Lo /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+#               sudo unzip -o /tmp/terraform.zip -d /tmp/terraform_bin
+#               sudo mv /tmp/terraform_bin/terraform /usr/local/bin/
+#               sudo rm -rf /tmp/terraform_bin /tmp/terraform.zip
+#             fi
+#       - run:
+#           name: Install kubectl
+#           command: |
+#             curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+#             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+#       - run:
+#           name: Terraform Apply
+#           command: |
+#             cd terraform
+#             terraform init -upgrade
+#             terraform apply -auto-approve tfplan
+#       - run:
+#           name: Apply gp2 StorageClass
+#           command: |
+#             aws eks update-kubeconfig --region $AWS_REGION --name todo-app-eks
+#             # --dry-run=client first to verify, then apply (--force replaces if already exists)
+#             kubectl apply -f terraform/gp2-storageclass.yaml --force
+#       - run:
+#           name: Export Outputs
+#           command: |
+#             cd terraform
+#             terraform output -json > ../terraform_outputs.json
+#       - persist_to_workspace:
+#           root: .
+#           paths:
+#             - terraform_outputs.json
+
+#   update_k8s_manifests:
+#     docker:
+#       - image: cimg/base:stable
+#     steps:
+#       - checkout
+#       - add_ssh_keys:
+#           fingerprints: ["SHA256:tuVaE4x16JWn8TkGzn7FBv9UaM8NlVyewF5BDunpxKc"]
+#       - run:
+#           name: Update Deployment Tag
+#           command: |
+#             sed -i "s|image: .*|image: $DOCKERHUB_USERNAME/project-app:$CIRCLE_SHA1|g" k8s/deployment.yaml
+#             git config user.email "circleci@bot.com"
+#             git config user.name "CircleCI Bot"
+#             git add k8s/deployment.yaml
+#             git commit -m "Update image tag to $CIRCLE_SHA1 [skip ci]" || true
+#             git push origin $CIRCLE_BRANCH
+
+#   deploy_argocd:
+#     docker:
+#       - image: cimg/python:3.11
+#     steps:
+#       - checkout
+#       - aws-cli/setup
+#       - run:
+#           name: Install kubectl & ArgoCD CLI
+#           command: |
+#             curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+#             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+#             curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+#             chmod +x /tmp/argocd && sudo mv /tmp/argocd /usr/local/bin/
+#       - run:
+#           name: Sync ArgoCD
+#           command: |
+#             aws eks update-kubeconfig --region $AWS_REGION --name todo-app-eks
+#             argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PASSWORD --insecure --grpc-web
+#             argocd app sync todo-app --grpc-web
+
+# workflows:
+#   infrastructure_workflow:
+#     jobs:
+#       - deploy_infrastructure:   
+#           filters: { branches: { only: infrastructure } }
+#       - hold_apply:
+#           type: approval
+#           requires: [deploy_infrastructure]
+#           filters: { branches: { only: infrastructure } }
+#       - apply_infrastructure:
+#           requires: [hold_apply]
+#           filters: { branches: { only: infrastructure } }
+
+#   app_workflow:
+#     jobs:
+#       - build:
+#           filters: { branches: { only: main } }
+#       - push_image:
+#           requires: [build]
+#       - update_k8s_manifests:
+#           requires: [push_image]
+#       - hold_deploy:
+#           type: approval
+#           requires: [update_k8s_manifests]
+#       - deploy_argocd:
+#           requires: [hold_deploy]
 
 
 
