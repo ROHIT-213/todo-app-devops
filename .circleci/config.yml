@@ -258,7 +258,6 @@ jobs:
           command: |
             kubectl apply -f argocd/application.yaml
             kubectl apply -f argocd/crd.yaml
-            kubectl apply -f argocd/monitoring-application.yaml
             kubectl apply -f argocd/metrics-server.yaml
             
             echo "Waiting for ArgoCD to register Prometheus CRDs in the EKS cluster..."
@@ -270,6 +269,13 @@ jobs:
               echo "CRDs aren't live yet. Retrying in 5 seconds ($i/20)..."
               sleep 5
             done
+
+            # Add a 10-second buffer to ensure the Kubernetes API fully caches the new CRD schema
+            echo "Giving Kubernetes API time to cache schemas..."
+            sleep 10
+
+            # 3. NOW apply the Monitoring Application (The Book) since the Dictionary is ready!
+            kubectl apply -f argocd/monitoring-application.yaml
 
             if [ -f "Monitoring/prometheus-alerts.yaml" ]; then
               kubectl apply -f Monitoring/prometheus-alerts.yaml
