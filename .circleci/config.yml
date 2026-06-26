@@ -211,14 +211,26 @@ jobs:
           name: Configure kubectl
           command: |
             aws eks update-kubeconfig --region $AWS_REGION --name todo-app-eks
-      # --- ADD THIS NEW STEP ---
+      # # --- ADD THIS NEW STEP ---
+      # - run:
+      #     name: Install Kubernetes Metrics Server (Required for HPA)
+      #     command: |
+      #       kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+      #       echo "Waiting for Metrics Server to initialize..."
+      #       kubectl rollout status deployment metrics-server -n kube-system --timeout=90s
+      # # -------------------------
+      # ====== ADD THIS NEW BLOCK to install crd and vpa components ======
       - run:
-          name: Install Kubernetes Metrics Server (Required for HPA)
+          name: Install Vertical Pod Autoscaler (CRDs and Controllers)
           command: |
-            kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-            echo "Waiting for Metrics Server to initialize..."
-            kubectl rollout status deployment metrics-server -n kube-system --timeout=90s
-      # -------------------------
+            echo "Installing VPA components..."
+            # Clone the official Kubernetes autoscaler repository into a temp folder
+            git clone https://github.com/kubernetes/autoscaler.git /tmp/autoscaler
+            cd /tmp/autoscaler/vertical-pod-autoscaler
+            
+            # Run the official installation script (installs CRDs, RBAC, and Recommender)
+            ./hack/vpa-up.sh
+      # ================================
       - run:
           name: Pre-stage Monitoring Dependencies & Secrets
           command: |
