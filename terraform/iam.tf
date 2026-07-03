@@ -167,11 +167,10 @@ resource "aws_iam_role_policy" "argocd_policy" {
     }]
   })
 }
-#added for cluster autoscaler
-resource "aws_iam_role_policy" "cluster_autoscaler_policy" {
-  name_prefix = "${var.project_name}-cluster-autoscaler-"
-  role        = aws_iam_role.eks_node_role.id
 
+# 1. The IAM Policy (Notice this is aws_iam_policy, NOT aws_iam_role_policy)
+resource "aws_iam_policy" "cluster_autoscaler_policy" {
+  name = "${var.project_name}-cluster-autoscaler-policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
