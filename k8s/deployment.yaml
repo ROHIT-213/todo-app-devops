@@ -65,7 +65,7 @@ spec:
         resources:
           requests:
             memory: "128Mi"
-            cpu: "100m"
+            cpu: "2000m"                #changed from 100m to 2000m for testing cluster auto scaler
           limits:
             memory: "512Mi"
             cpu: "500m"
