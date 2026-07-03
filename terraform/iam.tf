@@ -192,3 +192,30 @@ resource "aws_iam_role_policy" "cluster_autoscaler_policy" {
     ]
   })
 }
+
+# 2. The IAM Role (The identity)
+resource "aws_iam_role" "cluster_autoscaler_role" {
+  name = "${var.project_name}-cluster-autoscaler-role"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      }
+      Condition = {
+        StringEquals = {
+          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:kube-system:cluster-autoscaler"
+        }
+      }
+    }]
+  })
+}
+
+# 3. Attach the policy
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler_attach" {
+  role       = aws_iam_role.cluster_autoscaler_role.name
+  policy_arn = aws_iam_policy.cluster_autoscaler_policy.arn
+}
