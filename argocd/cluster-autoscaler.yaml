@@ -23,6 +23,8 @@ spec:
           value: "true"
         - name: rbac.serviceAccount.name
           value: "cluster-autoscaler"
+        - name: rbac.serviceAccount.annotations.eks\.amazonaws\.com/role-arn
+          value: "arn:aws:iam::333079845879:role/todo-app-cluster-autoscaler-role"
 
   destination:
     server: https://kubernetes.default.svc
