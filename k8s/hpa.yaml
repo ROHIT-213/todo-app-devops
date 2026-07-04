@@ -9,7 +9,7 @@ spec:
     kind: Deployment
     name: todo-app-deployment
   minReplicas: 3
-  maxReplicas: 10
+  maxReplicas: 50
   metrics:
   - type: Resource
     resource:
