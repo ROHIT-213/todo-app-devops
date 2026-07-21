@@ -11,7 +11,7 @@ spec:
   updatePolicy:
     # "Off" means Recommendation Mode. It calculates the optimal 
     # resource requests but lets HPA do the actual scaling.
-    updateMode: "Auto" 
+    updateMode: "off" 
   resourcePolicy:
     containerPolicies:
       - containerName: '*'
