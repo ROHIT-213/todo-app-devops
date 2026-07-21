@@ -8,8 +8,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: todo-app-deployment
-  minReplicas: 50
-  maxReplicas: 100
+  minReplicas: 3
+  maxReplicas: 10
   metrics:
   - type: Resource
     resource:
